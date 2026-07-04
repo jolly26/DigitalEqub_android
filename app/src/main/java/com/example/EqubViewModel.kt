@@ -257,6 +257,72 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
                 val state = if (isVerified) "Verified" else "Unverified"
                 logAction("VERIFY_PAYMENT", "Set installment ID $installmentId ($memberName, ${inst.amount} ETB) to $state", inst.amount)
                 feedbackMessage.emit("Payment marked as $state")
+                
+                if (isVerified) {
+                    checkAndTransitionCycle()
+                }
+            }
+        }
+    }
+
+    private suspend fun checkAndTransitionCycle() {
+        val eq = dao.getEqubGroup() ?: return
+        val allMembers = dao.getAllMembers()
+        val activeMembers = allMembers.filter { it.isActive }
+        if (activeMembers.isEmpty()) return
+
+        val installments = dao.getAllInstallments()
+        val currentRound = eq.currentRound
+        val currentCycle = eq.currentCycleIndex
+
+        // Check if everyone has paid fully and all their installments for this cycle are verified
+        var allMembersPaidAndVerified = true
+        for (m in activeMembers) {
+            val memberInsts = installments.filter { 
+                it.memberId == m.id && it.round == currentRound && it.cycleIndex == currentCycle 
+            }
+            val totalPaid = memberInsts.sumOf { it.amount }
+            val allVerified = memberInsts.all { it.isVerified }
+            
+            if (totalPaid < eq.contribution || !allVerified || memberInsts.isEmpty()) {
+                allMembersPaidAndVerified = false
+                break
+            }
+        }
+
+        if (allMembersPaidAndVerified) {
+            // 1. Draw winner if not already set
+            val currentWinner = allMembers.find { it.payoutRound == currentRound && it.payoutCycleIndex == currentCycle }
+            var winnerName = currentWinner?.name
+            
+            if (currentWinner == null) {
+                val eligible = activeMembers.filter { it.payoutRound != currentRound || it.payoutCycleIndex == null }
+                if (eligible.isNotEmpty()) {
+                    val newWinner = eligible.random()
+                    winnerName = newWinner.name
+                    dao.setMemberPayout(newWinner.id, currentRound, currentCycle, getCurrentTimestamp())
+                    logAction("AUTO_DRAW_WINNER", "Cycle complete! Automated Lottery Drawn (ዕጣ): $winnerName", eq.contribution)
+                }
+            }
+
+            feedbackMessage.emit("Cycle $currentCycle Complete! All payments verified. Winner: ${winnerName ?: "Unknown"}")
+
+            // 2. Advance cycle or start next round
+            val stillEligible = activeMembers.count { it.payoutRound != currentRound || it.payoutCycleIndex == null }
+            if (stillEligible == 0) {
+                // Round complete
+                val nextRound = currentRound + 1
+                dao.updateRoundAndCycle(nextRound, 1)
+                for (m in allMembers) {
+                    dao.setMemberPayout(m.id, null, null, null)
+                }
+                logAction("AUTO_ARCHIVE_ROUND", "Round $currentRound complete! Automatically started Round $nextRound")
+                feedbackMessage.emit("Round $currentRound finished! Archive generated. Starting Round $nextRound.")
+            } else {
+                val nextCycle = currentCycle + 1
+                dao.updateCurrentCycle(nextCycle)
+                logAction("AUTO_ADVANCE_CYCLE", "Cycle complete! Automatically advanced to Month $nextCycle")
+                feedbackMessage.emit("Moving to Month $nextCycle...")
             }
         }
     }
