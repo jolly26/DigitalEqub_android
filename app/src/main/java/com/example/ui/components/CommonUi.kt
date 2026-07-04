@@ -4,12 +4,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ArrowDropUp
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,12 +20,263 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.Member
+import java.text.SimpleDateFormat
+import java.util.*
+
+@Composable
+fun HeaderBar(
+    equbName: String,
+    round: Int,
+    cycleIndex: Int,
+    role: String,
+    onRoleClick: () -> Unit
+) {
+    Surface(
+        color = Color.White,
+        tonalElevation = 1.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = equbName,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+                Text(
+                    text = "ROUND $round • CYCLE MONTH $cycleIndex",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF64748B),
+                    letterSpacing = 1.sp
+                )
+            }
+            
+            val style = when (role) {
+                "CHAIRMAN" -> Triple(Color(0xFFE0E7FF), Color(0xFF4F46E5), "Chairman (A)")
+                "CO_CHAIR" -> Triple(Color(0xFFE0F2FE), Color(0xFF0284C7), "Co-Chair (B)")
+                else -> Triple(Color(0xFFF1F5F9), Color(0xFF64748B), "Regular Member")
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(style.first)
+                    .clickable { onRoleClick() }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .testTag("role_badge_toggle")
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(style.second)
+                    )
+                    Text(
+                        text = style.third,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF334155)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun InitialSetupScreen(
+    onSetup: (name: String, contribution: Long, cycle: String, startDate: String) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var contributionStr by remember { mutableStateOf("") }
+    var cycleType by remember { mutableStateOf("Monthly") }
+    var startDate by remember { mutableStateOf("") }
+
+    LaunchedEffect(key1 = true) {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        startDate = sdf.format(Date())
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            modifier = Modifier.fillMaxWidth().widthIn(max = 500.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Savings,
+                    contentDescription = "Equb Savings Logo",
+                    tint = Color(0xFF4F46E5),
+                    modifier = Modifier.size(56.dp)
+                )
+                
+                Text(
+                    text = "Setup New Equb Group",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+                
+                Text(
+                    text = "Ethiopian Rotating Savings Association (ዕቁብ) management completely offline & secure.",
+                    fontSize = 13.sp,
+                    color = Color(0xFF64748B),
+                    textAlign = TextAlign.Center,
+                    lineHeight = 18.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                DoubleTapOutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Equb Name") },
+                    placeholder = { Text("e.g., Abyssinia Traders Equb") },
+                    modifier = Modifier.fillMaxWidth().testTag("setup_equb_name"),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                DoubleTapOutlinedTextField(
+                    value = contributionStr,
+                    onValueChange = { if (it.all { char -> char.isDigit() }) contributionStr = it },
+                    label = { Text("Monthly Contribution (ETB)") },
+                    placeholder = { Text("e.g., 5000") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth().testTag("setup_equb_contribution"),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text("Contribution Frequency", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("Weekly", "Bi-weekly", "Monthly").forEach { freq ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (cycleType == freq) Color(0xFF4F46E5) else Color(0xFFF1F5F9))
+                                    .clickable { cycleType = freq }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = freq,
+                                    color = if (cycleType == freq) Color.White else Color(0xFF475569),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                DoubleTapOutlinedTextField(
+                    value = startDate,
+                    onValueChange = { startDate = it },
+                    label = { Text("Start Date") },
+                    placeholder = { Text("YYYY-MM-DD") },
+                    modifier = Modifier.fillMaxWidth().testTag("setup_equb_start_date"),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = {
+                        val contrib = contributionStr.toLongOrNull() ?: 0
+                        if (name.isNotBlank() && contrib > 0 && startDate.isNotBlank()) {
+                            onSetup(name, contrib, cycleType, startDate)
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .testTag("setup_submit_button"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5))
+                ) {
+                    Text("Initialize Equb", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BottomNavBar(
+    activeTab: String,
+    onTabSelect: (String) -> Unit
+) {
+    NavigationBar(
+        containerColor = Color.White,
+        tonalElevation = 8.dp,
+        modifier = Modifier.height(72.dp)
+    ) {
+        val tabs = listOf(
+            Triple("home", "Home", Icons.Default.Home),
+            Triple("members", "Directory", Icons.Default.Group),
+            Triple("sms", "Sms Parse", Icons.Default.Mail),
+            Triple("reports", "Reports", Icons.Default.Analytics),
+            Triple("backups", "Backups", Icons.Default.Backup)
+        )
+
+        tabs.forEach { (tabId, label, icon) ->
+            NavigationBarItem(
+                selected = activeTab == tabId,
+                onClick = { onTabSelect(tabId) },
+                icon = { Icon(icon, contentDescription = label, modifier = Modifier.size(20.dp)) },
+                label = { Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF4F46E5),
+                    selectedTextColor = Color(0xFF4F46E5),
+                    indicatorColor = Color(0xFFEEF2F6),
+                    unselectedIconColor = Color(0xFF94A3B8),
+                    unselectedTextColor = Color(0xFF94A3B8)
+                ),
+                modifier = Modifier.testTag("nav_tab_$tabId")
+            )
+        }
+    }
+}
 
 @Composable
 fun DoubleTapOutlinedTextField(
