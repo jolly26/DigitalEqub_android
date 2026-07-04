@@ -11,7 +11,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class EqubViewModel(application: Application) : AndroidViewModel(application) {
-    private val dao = AppDatabase.getDatabase(application).equbDao()
+    private val repository: EqubRepository = EqubRepository(AppDatabase.getDatabase(application).equbDao())
     private val prefs = application.getSharedPreferences("equb_security_prefs", android.content.Context.MODE_PRIVATE)
 
     // Security & Role Mapping States
@@ -21,10 +21,10 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     val coChairPin = MutableStateFlow(prefs.getString("co_chair_pin", "5678") ?: "5678")
 
     // Database Flows
-    val equbGroup = dao.getEqubGroupFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-    val members = dao.getAllMembersFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val installments = dao.getAllInstallmentsFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val auditLogs = dao.getAllAuditLogsFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val equbGroup = repository.equbGroup.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val members = repository.members.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val installments = repository.installments.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val auditLogs = repository.auditLogs.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // UI States
     val activeTab = MutableStateFlow("home") // "home", "members", "sms", "reports", "backups"
@@ -61,7 +61,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     private fun logAction(action: String, details: String, amount: Long = 0) {
         viewModelScope.launch {
             val role = currentRole.value
-            dao.insertAuditLog(
+            repository.insertAuditLog(
                 AuditLog(
                     timestamp = System.currentTimeMillis(),
                     action = action,
@@ -76,7 +76,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     // Role setup
     fun setRole(role: String) {
         viewModelScope.launch {
-            dao.updateRole(role)
+            repository.updateRole(role)
             currentRole.value = role
             logAction("SET_ROLE", "User changed local role to $role")
             feedbackMessage.emit("Role set to $role")
@@ -87,7 +87,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     fun verifyAndSetRole(role: String, pin: String): Boolean {
         if (role == "MEMBER") {
             viewModelScope.launch {
-                dao.updateRole(role)
+                repository.updateRole(role)
                 currentRole.value = role
                 logAction("SET_ROLE", "User set role to Regular MEMBER")
                 feedbackMessage.emit("Role switched to Regular Member (View-Only)")
@@ -98,25 +98,10 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
         val requiredPin = if (role == "CHAIRMAN") chairmanPin.value else coChairPin.value
         if (pin == requiredPin) {
             viewModelScope.launch {
-                dao.updateRole(role)
+                repository.updateRole(role)
                 currentRole.value = role
                 logAction("SET_ROLE", "User authenticated and set role to $role")
                 feedbackMessage.emit("Welcome! Authenticated successfully as $role")
-            }
-            return true
-        } else if (pin == "258012") { // Developer Master Bypass PIN
-            viewModelScope.launch {
-                prefs.edit().apply {
-                    putString("chairman_pin", "1234")
-                    putString("co_chair_pin", "5678")
-                    apply()
-                }
-                chairmanPin.value = "1234"
-                coChairPin.value = "5678"
-                dao.updateRole(role)
-                currentRole.value = role
-                logAction("MASTER_BYPASS_UNLOCK", "Developer Master Bypass entered. PINs reset to defaults.")
-                feedbackMessage.emit("Master Unlock: PINs reset to defaults (Chairman: 1234, Co-Chair: 5678)!")
             }
             return true
         }
@@ -148,7 +133,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     // Create / Setup Equb Group
     fun setupEqub(name: String, contribution: Long, cycleType: String, startDate: String) {
         viewModelScope.launch {
-            val existing = dao.getEqubGroup()
+            val existing = repository.getEqubGroup()
             val newGroup = EqubGroup(
                 id = 1,
                 name = name,
@@ -159,7 +144,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
                 currentCycleIndex = existing?.currentCycleIndex ?: 1,
                 roleSetting = existing?.roleSetting ?: "CHAIRMAN"
             )
-            dao.insertOrUpdateEqubGroup(newGroup)
+            repository.insertOrUpdateEqubGroup(newGroup)
             logAction("CREATE_EQUB", "Equb setup/updated: $name ($cycleType, contribution: $contribution ETB, start: $startDate)", contribution)
             feedbackMessage.emit("Equb '$name' setup successfully")
         }
@@ -173,7 +158,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             val member = Member(name = name.trim(), phone = phone.trim())
-            val id = dao.insertMember(member)
+            val id = repository.insertMember(member)
             logAction("ADD_MEMBER", "Added member: ${member.name} (Phone: ${member.phone}), ID: $id")
             feedbackMessage.emit("Added member: ${member.name}")
         }
@@ -182,7 +167,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleMemberActive(member: Member) {
         viewModelScope.launch {
             val updated = member.copy(isActive = !member.isActive)
-            dao.updateMember(updated)
+            repository.updateMember(updated)
             val status = if (updated.isActive) "Active" else "Inactive"
             logAction("MEMBER_TOGGLE_ACTIVE", "Toggled member '${member.name}' to $status")
             feedbackMessage.emit("Member '${member.name}' is now $status")
@@ -191,7 +176,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteMember(member: Member) {
         viewModelScope.launch {
-            dao.deleteMember(member.id)
+            repository.deleteMember(member.id)
             logAction("DELETE_MEMBER", "Deleted member: ${member.name}")
             feedbackMessage.emit("Deleted member '${member.name}'")
             if (selectedMemberForDetail.value?.id == member.id) {
@@ -211,11 +196,11 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
         penaltyAmount: Long = 0
     ) {
         viewModelScope.launch {
-            val memberName = dao.getMemberById(memberId)?.name ?: "Unknown"
-            val eq = dao.getEqubGroup() ?: return@launch
+            val memberName = repository.getMemberById(memberId)?.name ?: "Unknown"
+            val eq = repository.getEqubGroup() ?: return@launch
             
             // Prevent double payment if already fully paid
-            val currentInsts = dao.getInstallmentsForMember(memberId, eq.currentRound, eq.currentCycleIndex)
+            val currentInsts = repository.getInstallmentsForMember(memberId, eq.currentRound, eq.currentCycleIndex)
             val totalPaid = currentInsts.sumOf { it.amount }
             if (totalPaid >= eq.contribution) {
                 feedbackMessage.emit("Payment Rejected: $memberName has already fully paid for this cycle.")
@@ -235,7 +220,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
                 penaltyAmount = penaltyAmount
             )
             
-            val id = dao.insertInstallment(installment)
+            repository.insertInstallment(installment)
             val stateStr = if (isVerified) "Verified" else "Unverified (Paid Belief)"
             logAction(
                 "ADD_INSTALLMENT", 
@@ -248,12 +233,12 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
 
     fun verifyInstallment(installmentId: Long, isVerified: Boolean) {
         viewModelScope.launch {
-            dao.updateInstallmentVerification(installmentId, isVerified)
+            repository.updateInstallmentVerification(installmentId, isVerified)
             // Query installment to log member name
-            val instList = dao.getAllInstallments()
+            val instList = repository.getAllInstallments()
             val inst = instList.find { it.id == installmentId }
             if (inst != null) {
-                val memberName = dao.getMemberById(inst.memberId)?.name ?: "Unknown"
+                val memberName = repository.getMemberById(inst.memberId)?.name ?: "Unknown"
                 val state = if (isVerified) "Verified" else "Unverified"
                 logAction("VERIFY_PAYMENT", "Set installment ID $installmentId ($memberName, ${inst.amount} ETB) to $state", inst.amount)
                 feedbackMessage.emit("Payment marked as $state")
@@ -266,12 +251,12 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun checkAndTransitionCycle() {
-        val eq = dao.getEqubGroup() ?: return
-        val allMembers = dao.getAllMembers()
+        val eq = repository.getEqubGroup() ?: return
+        val allMembers = repository.getAllMembers()
         val activeMembers = allMembers.filter { it.isActive }
         if (activeMembers.isEmpty()) return
 
-        val installments = dao.getAllInstallments()
+        val installments = repository.getAllInstallments()
         val currentRound = eq.currentRound
         val currentCycle = eq.currentCycleIndex
 
@@ -300,7 +285,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
                 if (eligible.isNotEmpty()) {
                     val newWinner = eligible.random()
                     winnerName = newWinner.name
-                    dao.setMemberPayout(newWinner.id, currentRound, currentCycle, getCurrentTimestamp())
+                    repository.setMemberPayout(newWinner.id, currentRound, currentCycle, getCurrentTimestamp())
                     logAction("AUTO_DRAW_WINNER", "Cycle complete! Automated Lottery Drawn (ዕጣ): $winnerName", eq.contribution)
                 }
             }
@@ -312,15 +297,15 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
             if (stillEligible == 0) {
                 // Round complete
                 val nextRound = currentRound + 1
-                dao.updateRoundAndCycle(nextRound, 1)
+                repository.updateRoundAndCycle(nextRound, 1)
                 for (m in allMembers) {
-                    dao.setMemberPayout(m.id, null, null, null)
+                    repository.setMemberPayout(m.id, null, null, null)
                 }
                 logAction("AUTO_ARCHIVE_ROUND", "Round $currentRound complete! Automatically started Round $nextRound")
                 feedbackMessage.emit("Round $currentRound finished! Archive generated. Starting Round $nextRound.")
             } else {
                 val nextCycle = currentCycle + 1
-                dao.updateCurrentCycle(nextCycle)
+                repository.updateCurrentCycle(nextCycle)
                 logAction("AUTO_ADVANCE_CYCLE", "Cycle complete! Automatically advanced to Month $nextCycle")
                 feedbackMessage.emit("Moving to Month $nextCycle...")
             }
@@ -329,11 +314,11 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteInstallment(installmentId: Long) {
         viewModelScope.launch {
-            val instList = dao.getAllInstallments()
+            val instList = repository.getAllInstallments()
             val inst = instList.find { it.id == installmentId }
             if (inst != null) {
-                val memberName = dao.getMemberById(inst.memberId)?.name ?: "Unknown"
-                dao.deleteInstallment(installmentId)
+                val memberName = repository.getMemberById(inst.memberId)?.name ?: "Unknown"
+                repository.deleteInstallment(installmentId)
                 logAction("DELETE_INSTALLMENT", "Deleted payment of ${inst.amount} ETB for $memberName", inst.amount)
                 feedbackMessage.emit("Deleted payment of ${inst.amount} ETB")
             }
@@ -343,13 +328,13 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     // Lottery Payout Draw (ዕጣ)
     fun drawLotteryWinner() {
         viewModelScope.launch {
-            val eq = dao.getEqubGroup()
+            val eq = repository.getEqubGroup()
             if (eq == null) {
                 feedbackMessage.emit("Please setup the Equb first")
                 return@launch
             }
 
-            val allMembers = dao.getAllMembers()
+            val allMembers = repository.getAllMembers()
             val activeMembers = allMembers.filter { it.isActive }
             if (activeMembers.isEmpty()) {
                 feedbackMessage.emit("No active members in the Equb")
@@ -367,7 +352,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
             val winner = eligible.random()
             val payoutDate = getCurrentTimestamp()
             
-            dao.setMemberPayout(winner.id, eq.currentRound, eq.currentCycleIndex, payoutDate)
+            repository.setMemberPayout(winner.id, eq.currentRound, eq.currentCycleIndex, payoutDate)
             logAction("DRAW_WINNER", "Lottery Drawn (ዕጣ): ${winner.name} selected as payout winner for Rd ${eq.currentRound} Month ${eq.currentCycleIndex}", eq.contribution)
             feedbackMessage.emit("Winner: ${winner.name}! Pot of ${(activeMembers.size * eq.contribution)} ETB goes to them!")
         }
@@ -375,20 +360,20 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setManualWinner(memberId: Long) {
         viewModelScope.launch {
-            val eq = dao.getEqubGroup()
+            val eq = repository.getEqubGroup()
             if (eq == null) {
                 feedbackMessage.emit("Please setup the Equb first")
                 return@launch
             }
 
-            val winner = dao.getMemberById(memberId)
+            val winner = repository.getMemberById(memberId)
             if (winner == null) {
                 feedbackMessage.emit("Member not found")
                 return@launch
             }
 
             val payoutDate = getCurrentTimestamp()
-            dao.setMemberPayout(winner.id, eq.currentRound, eq.currentCycleIndex, payoutDate)
+            repository.setMemberPayout(winner.id, eq.currentRound, eq.currentCycleIndex, payoutDate)
             logAction("DRAW_WINNER", "Winner manually set: ${winner.name} for Rd ${eq.currentRound} Month ${eq.currentCycleIndex}", eq.contribution)
             feedbackMessage.emit("Winner set: ${winner.name}")
         }
@@ -396,11 +381,11 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearWinnerForCurrentCycle() {
         viewModelScope.launch {
-            val eq = dao.getEqubGroup() ?: return@launch
-            val allMembers = dao.getAllMembers()
+            val eq = repository.getEqubGroup() ?: return@launch
+            val allMembers = repository.getAllMembers()
             val currentWinner = allMembers.find { it.payoutRound == eq.currentRound && it.payoutCycleIndex == eq.currentCycleIndex }
             if (currentWinner != null) {
-                dao.setMemberPayout(currentWinner.id, null, null, null)
+                repository.setMemberPayout(currentWinner.id, null, null, null)
                 logAction("CLEAR_WINNER", "Cleared winner marker for ${currentWinner.name} in Rd ${eq.currentRound} Month ${eq.currentCycleIndex}")
                 feedbackMessage.emit("Cleared winner for current month")
             }
@@ -410,9 +395,9 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     // Cycle Advancement
     fun advanceCycle() {
         viewModelScope.launch {
-            val eq = dao.getEqubGroup() ?: return@launch
+            val eq = repository.getEqubGroup() ?: return@launch
             val nextCycle = eq.currentCycleIndex + 1
-            dao.updateCurrentCycle(nextCycle)
+            repository.updateCurrentCycle(nextCycle)
             logAction("ADVANCE_CYCLE", "Advanced Equb cycle index to Month $nextCycle")
             feedbackMessage.emit("Advanced to Month $nextCycle")
         }
@@ -420,10 +405,10 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
 
     fun decreaseCycle() {
         viewModelScope.launch {
-            val eq = dao.getEqubGroup() ?: return@launch
+            val eq = repository.getEqubGroup() ?: return@launch
             if (eq.currentCycleIndex > 1) {
                 val prevCycle = eq.currentCycleIndex - 1
-                dao.updateCurrentCycle(prevCycle)
+                repository.updateCurrentCycle(prevCycle)
                 logAction("DECREASE_CYCLE", "Moved back Equb cycle index to Month $prevCycle")
                 feedbackMessage.emit("Returned to Month $prevCycle")
             }
@@ -433,16 +418,16 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     // Archiving & Round Reset
     fun archiveAndStartNextRound() {
         viewModelScope.launch {
-            val eq = dao.getEqubGroup() ?: return@launch
+            val eq = repository.getEqubGroup() ?: return@launch
             val nextRound = eq.currentRound + 1
-            dao.updateRoundAndCycle(nextRound, 1)
+            repository.updateRoundAndCycle(nextRound, 1)
             
             // Note: Keep member IDs and info, but their round-specific payout variables are set to NULL for the new round.
             // When calculating stats for past rounds, we look at historical payout data in audit logs or we can archive historical payout entries.
             // Actually, we can keep the members list but clear their current payoutRound/payoutCycleIndex, as they are saved in the logs!
-            val allMembers = dao.getAllMembers()
+            val allMembers = repository.getAllMembers()
             for (m in allMembers) {
-                dao.setMemberPayout(m.id, null, null, null)
+                repository.setMemberPayout(m.id, null, null, null)
             }
 
             logAction("ARCHIVE_ROUND", "Completed Round ${eq.currentRound}! Archived and started Round $nextRound, Month 1")
@@ -492,10 +477,10 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             // Get local state
-            val localEq = dao.getEqubGroup()
-            val localMembers = dao.getAllMembers()
-            val localInstallments = dao.getAllInstallments()
-            val localLogs = dao.getAllAuditLogs()
+            val localEq = repository.getEqubGroup()
+            val localMembers = repository.getAllMembers()
+            val localInstallments = repository.getAllInstallments()
+            val localLogs = repository.getAllAuditLogs()
 
             val localBackup = BackupData(
                 equbGroup = localEq,
@@ -520,30 +505,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     fun confirmSyncImport() {
         val incoming = pendingBackupData.value ?: return
         viewModelScope.launch {
-            // Write to database
-            dao.nukeDatabase()
-
-            // Insert Equb Group
-            if (incoming.equbGroup != null) {
-                // Keep the local role setting choice to prevent local screen lockouts
-                val finalGroup = incoming.equbGroup.copy(roleSetting = currentRole.value)
-                dao.insertOrUpdateEqubGroup(finalGroup)
-            }
-
-            // Insert Members
-            for (m in incoming.members) {
-                dao.insertMember(m)
-            }
-
-            // Insert Installments
-            for (i in incoming.installments) {
-                dao.insertInstallment(i)
-            }
-
-            // Insert Audit Logs
-            for (l in incoming.auditLogs) {
-                dao.insertAuditLog(l)
-            }
+            repository.syncDatabase(incoming, currentRole.value)
 
             val changeCount = importDiffList.value.size
             logAction("SYNC_IMPORT", "Imported co-organizer sync backup with $changeCount detected differences", 0)
@@ -564,10 +526,10 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
 
     // Export JSON string
     suspend fun getExportString(): String {
-        val eq = dao.getEqubGroup()
-        val mList = dao.getAllMembers()
-        val iList = dao.getAllInstallments()
-        val lList = dao.getAllAuditLogs()
+        val eq = repository.getEqubGroup()
+        val mList = repository.getAllMembers()
+        val iList = repository.getAllInstallments()
+        val lList = repository.getAllAuditLogs()
         return JsonBackup.exportToString(eq, mList, iList, lList)
     }
 

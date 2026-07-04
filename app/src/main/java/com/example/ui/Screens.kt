@@ -549,7 +549,7 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 StatBadgeBox(
-                    label = "Paid",
+                    label = "Paid (ሙሉ የከፈሉ)",
                     count = paidCount,
                     textColor = Color(0xFF16A34A),
                     bgColor = Color(0xFFDCFCE7),
@@ -559,7 +559,7 @@ fun HomeScreen(
                     }
                 )
                 StatBadgeBox(
-                    label = "Partial",
+                    label = "Partial (ከፊል)",
                     count = partialCount,
                     textColor = Color(0xFFD97706),
                     bgColor = Color(0xFFFEF3C7),
@@ -569,7 +569,7 @@ fun HomeScreen(
                     }
                 )
                 StatBadgeBox(
-                    label = "Unpaid",
+                    label = "Unpaid (ምንም ያልከፈሉ)",
                     count = unpaidCount,
                     textColor = Color(0xFFDC2626),
                     bgColor = Color(0xFFFEE2E2),
@@ -858,16 +858,18 @@ fun StatBadgeBox(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(horizontal = 8.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
-                text = label.uppercase(),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Black,
+                text = label,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
                 color = Color(0xFF64748B),
-                letterSpacing = 0.5.sp
+                textAlign = TextAlign.Center,
+                lineHeight = 12.sp,
+                maxLines = 2
             )
             Box(
                 modifier = Modifier
@@ -1442,9 +1444,9 @@ fun MemberRowCard(
     val isPartial = totalPaid > 0 && totalPaid < equb.contribution
 
     val statusText = when {
-        isFullyPaid -> "Paid"
-        isPartial -> "Partial"
-        else -> "Unpaid"
+        isFullyPaid -> "Paid (ሙሉ የከፈሉ)"
+        isPartial -> "Partial (ከፊል)"
+        else -> "Unpaid (ምንም ያልከፈሉ)"
     }
 
     val statusColor = when {
@@ -2046,7 +2048,7 @@ fun ReportsScreen(
                         val totalPaid = paidSumMap[m.id] ?: 0L
                         val ratio = "$totalPaid/${equb.contribution} ETB"
                         val isFullyPaid = totalPaid >= equb.contribution
-                        val statusText = if (isFullyPaid) "Fully Paid" else if (totalPaid > 0) "Partial" else "No payment"
+                        val statusText = if (isFullyPaid) "Fully Paid (ሙሉ የከፈሉ)" else if (totalPaid > 0) "Partial (ከፊል)" else "No payment (ምንም ያልከፈሉ)"
                         
                         Card(
                             shape = RoundedCornerShape(16.dp),
@@ -2060,11 +2062,17 @@ fun ReportsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(m.name, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                    Text(statusText, fontSize = 11.sp, color = if (isFullyPaid) Color(0xFF16A34A) else Color(0xFFDC2626), fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        text = statusText,
+                                        fontSize = 11.sp,
+                                        color = if (isFullyPaid) Color(0xFF16A34A) else Color(0xFFDC2626),
+                                        fontWeight = FontWeight.SemiBold,
+                                        lineHeight = 14.sp
+                                    )
                                 }
-                                Text(ratio, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+                                Text(ratio, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B), modifier = Modifier.padding(start = 8.dp))
                             }
                         }
                     }
