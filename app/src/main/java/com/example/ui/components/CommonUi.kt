@@ -52,12 +52,14 @@ fun HeaderBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = equbName,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1E293B)
+                    color = Color(0xFF1E293B),
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
                 Text(
                     text = "ROUND $round • CYCLE MONTH $cycleIndex",
@@ -67,6 +69,8 @@ fun HeaderBar(
                     letterSpacing = 1.sp
                 )
             }
+            
+            Spacer(modifier = Modifier.width(12.dp))
             
             val style = when (role) {
                 "CHAIRMAN" -> Triple(Color(0xFFE0E7FF), Color(0xFF4F46E5), "Chairman (A)")
@@ -248,13 +252,12 @@ fun BottomNavBar(
 ) {
     NavigationBar(
         containerColor = Color.White,
-        tonalElevation = 8.dp,
-        modifier = Modifier.height(72.dp)
+        tonalElevation = 8.dp
     ) {
         val tabs = listOf(
             Triple("home", "Home", Icons.Default.Home),
-            Triple("members", "Directory", Icons.Default.Group),
-            Triple("sms", "Sms Parse", Icons.Default.Mail),
+            Triple("members", "Members", Icons.Default.Group),
+            Triple("sms", "SMS", Icons.Default.Mail),
             Triple("reports", "Reports", Icons.Default.Analytics),
             Triple("backups", "Backups", Icons.Default.Backup)
         )
@@ -262,8 +265,9 @@ fun BottomNavBar(
         tabs.forEach { (tabId, label, icon) ->
             NavigationBarItem(
                 selected = activeTab == tabId,
+                alwaysShowLabel = false,
                 onClick = { onTabSelect(tabId) },
-                icon = { Icon(icon, contentDescription = label, modifier = Modifier.size(20.dp)) },
+                icon = { Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp)) },
                 label = { Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold) },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Color(0xFF4F46E5),
