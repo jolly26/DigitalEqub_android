@@ -1,0 +1,6 @@
+{
+  "name": "Equb Manager",
+  "description": "Offline-first Rotating Savings Association (Equb) manager for Ethiopian communities, featuring automatic SMS bank transaction parsing, installment tracking, and flexible lottery-based payout (ዕጣ).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
