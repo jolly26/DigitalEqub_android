@@ -11,11 +11,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.items
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
+import kotlinx.coroutines.launch
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.LocalFocusManager
@@ -28,6 +25,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -57,7 +55,7 @@ private data class RoleBadgeStyle(
     val bg: Color,
     val dot: Color,
     val label: String,
-    val text: Color
+    val text: Color,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -148,9 +146,7 @@ fun EqubAppContent(viewModel: EqubViewModel) {
                     "backups" -> BackupsScreen(
                         viewModel = viewModel,
                         equb = equb!!,
-                        members = memberList,
-                        installments = installmentList,
-                        logs = logsList
+                        members = memberList
                     )
                 }
             }
@@ -819,7 +815,7 @@ fun PaymentItemCard(
     onDeleteClick: () -> Unit
 ) {
     val initials = if (memberName.isNotBlank()) {
-        memberName.split(" ").take(2).map { it.take(1) }.joinToString("").uppercase()
+        memberName.split(" ").asSequence().take(2).map { it.take(1) }.joinToString("").uppercase()
     } else "UN"
 
     Card(
@@ -1183,7 +1179,7 @@ fun MembersScreen(
         var method by remember { mutableStateOf("CBE") }
         var reference by remember { mutableStateOf("") }
         var remarks by remember { mutableStateOf("") }
-        var verifyImmediately by remember { mutableStateOf(viewModel.currentRole.value == "CHAIRMAN") }
+        var verifyImmediately by remember(currentRole) { mutableStateOf(currentRole == "CHAIRMAN") }
 
         Dialog(onDismissRequest = { showPaymentDialogForMember = null }) {
             Card(
@@ -1290,7 +1286,7 @@ fun MembersScreen(
                         )
 
                         // Immediate Verification checkbox (only allowed/useful for chairman)
-                        if (viewModel.currentRole.value == "CHAIRMAN") {
+                        if (currentRole == "CHAIRMAN") {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(top = 4.dp)
@@ -1474,7 +1470,7 @@ fun MemberRowCard(
                         .padding(horizontal = 12.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "$statusText (${totalPaid}/${equb.contribution})",
+                        text = "$statusText ($totalPaid/${equb.contribution})",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Black,
                         color = statusColor
@@ -1494,7 +1490,7 @@ fun MemberRowCard(
                         .padding(top = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Divider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = Color(0xFFF1F5F9))
 
                     // Installments History sub-section
                     if (installments.isNotEmpty()) {
@@ -1742,7 +1738,7 @@ fun SmsScreen(
                             }
                         }
 
-                        Divider(color = Color(0xFFCBD5E1))
+                        HorizontalDivider(color = Color(0xFFCBD5E1))
 
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             ParsedFieldBox(label = "Bank Source", value = proposalVal.bank, modifier = Modifier.weight(1f))
@@ -1758,7 +1754,7 @@ fun SmsScreen(
                             ParsedFieldBox(label = "Discovered Sender", value = proposalVal.senderName, modifier = Modifier.fillMaxWidth())
                         }
 
-                        Divider(color = Color(0xFFCBD5E1))
+                        HorizontalDivider(color = Color(0xFFCBD5E1))
 
                         // Match Member section
                         Text(
@@ -1814,7 +1810,7 @@ fun SmsScreen(
                                         ) {
                                             Text(member.name, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                             if (isWriteAuthorized) {
-                                                Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF4F46E5), modifier = Modifier.size(16.dp))
+                                                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = Color(0xFF4F46E5), modifier = Modifier.size(16.dp))
                                             }
                                         }
                                     }
@@ -1935,7 +1931,7 @@ fun ReportsScreen(
             }
         }
 
-        Divider(color = Color(0xFFE2E8F0))
+        HorizontalDivider(color = Color(0xFFE2E8F0))
 
         // VIEW RENDERING BASED ON SUB TAB
         when (selectedReportSubTab) {
@@ -2103,9 +2099,7 @@ fun ReportsScreen(
 fun BackupsScreen(
     viewModel: EqubViewModel,
     equb: EqubGroup,
-    members: List<Member>,
-    installments: List<Installment>,
-    logs: List<AuditLog>
+    members: List<Member>
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -2122,8 +2116,8 @@ fun BackupsScreen(
     val initialChairPin by viewModel.chairmanPin.collectAsState()
     val initialCoChairPin by viewModel.coChairPin.collectAsState()
 
-    var selectedChairId by remember(initialChairId) { mutableStateOf(initialChairId) }
-    var selectedCoChairId by remember(initialCoChairId) { mutableStateOf(initialCoChairId) }
+    var selectedChairId by remember(initialChairId) { mutableLongStateOf(initialChairId) }
+    var selectedCoChairId by remember(initialCoChairId) { mutableLongStateOf(initialCoChairId) }
     var inputChairPin by remember(initialChairPin) { mutableStateOf(initialChairPin) }
     var inputCoChairPin by remember(initialCoChairPin) { mutableStateOf(initialCoChairPin) }
 
@@ -2167,7 +2161,7 @@ fun BackupsScreen(
                         lineHeight = 15.sp
                     )
 
-                    Divider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = Color(0xFFF1F5F9))
 
                     // Active Role Display Section
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2226,7 +2220,7 @@ fun BackupsScreen(
                         }
                     }
 
-                    Divider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = Color(0xFFF1F5F9))
 
                     val isAdmin = currentRole == "CHAIRMAN"
                     if (!isAdmin) {
@@ -2404,7 +2398,7 @@ fun BackupsScreen(
                         }
                     }
 
-                    Divider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = Color(0xFFF1F5F9))
 
                     Text(
                         text = "Archive Current Round",
@@ -2574,7 +2568,7 @@ fun BackupsScreen(
                             color = Color(0xFF78350F)
                         )
 
-                        Divider(color = Color(0xFFFDE68A))
+                        HorizontalDivider(color = Color(0xFFFDE68A))
 
                         // Render diff items nicely
                         Column(
@@ -2616,7 +2610,7 @@ fun BackupsScreen(
                             }
                         }
 
-                        Divider(color = Color(0xFFFDE68A))
+                        HorizontalDivider(color = Color(0xFFFDE68A))
 
                         Button(
                             onClick = { viewModel.confirmSyncImport() },
@@ -2705,8 +2699,6 @@ fun DoubleTapOutlinedTextField(
         unfocusedPlaceholderColor = Color(0xFF94A3B8)
     )
 ) {
-    var isEditingByDoubleTap by remember { mutableStateOf(false) }
-    val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -2714,7 +2706,6 @@ fun DoubleTapOutlinedTextField(
         onDone = {
             focusManager.clearFocus()
             keyboardController?.hide()
-            isEditingByDoubleTap = false
             keyboardActions.onDone?.invoke(this)
         },
         onNext = {
@@ -2724,13 +2715,11 @@ fun DoubleTapOutlinedTextField(
         onSearch = {
             focusManager.clearFocus()
             keyboardController?.hide()
-            isEditingByDoubleTap = false
             keyboardActions.onSearch?.invoke(this)
         },
         onGo = {
             focusManager.clearFocus()
             keyboardController?.hide()
-            isEditingByDoubleTap = false
             keyboardActions.onGo?.invoke(this)
         }
     )
@@ -2747,58 +2736,23 @@ fun DoubleTapOutlinedTextField(
         keyboardOptions
     }
 
-    Box(
-        modifier = modifier
-            .pointerInput(enabled, isEditingByDoubleTap) {
-                if (enabled && !isEditingByDoubleTap) {
-                    detectTapGestures(
-                        onDoubleTap = {
-                            isEditingByDoubleTap = true
-                            focusRequester.requestFocus()
-                            keyboardController?.show()
-                        }
-                    )
-                }
-            }
-    ) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = {
-                if (!enabled || readOnly) return@OutlinedTextField
-                if (isEditingByDoubleTap) {
-                    onValueChange(it)
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester)
-                .onFocusChanged { focusState ->
-                    if (!focusState.isFocused) {
-                        isEditingByDoubleTap = false
-                    }
-                },
-            enabled = enabled,
-            readOnly = readOnly || !isEditingByDoubleTap,
-            label = label ?: {
-                if (!isEditingByDoubleTap && value.isEmpty()) {
-                    Text("Double tap to edit")
-                }
-            },
-            placeholder = placeholder ?: {
-                if (!isEditingByDoubleTap && value.isEmpty()) {
-                    Text("Double tap to edit")
-                }
-            },
-            leadingIcon = leadingIcon,
-            trailingIcon = trailingIcon,
-            keyboardOptions = finalKeyboardOptions,
-            keyboardActions = finalKeyboardActions,
-            singleLine = singleLine,
-            maxLines = maxLines,
-            shape = shape,
-            colors = colors
-        )
-    }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier.fillMaxWidth(),
+        enabled = enabled,
+        readOnly = readOnly,
+        label = label,
+        placeholder = placeholder,
+        leadingIcon = leadingIcon,
+        trailingIcon = trailingIcon,
+        keyboardOptions = finalKeyboardOptions,
+        keyboardActions = finalKeyboardActions,
+        singleLine = singleLine,
+        maxLines = maxLines,
+        shape = shape,
+        colors = colors
+    )
 }
 
 @Composable
@@ -2917,7 +2871,7 @@ fun RoleSecurityDialog(
                         lineHeight = 16.sp
                     )
 
-                    Divider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = Color(0xFFF1F5F9))
 
                     // Role List selection buttons
                     listOf(
@@ -3054,7 +3008,7 @@ fun RoleSecurityDialog(
                         lineHeight = 16.sp
                     )
 
-                    Divider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = Color(0xFFF1F5F9))
 
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(

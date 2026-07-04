@@ -11,9 +11,9 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk = 35
+    compileSdk = 36
 
-  defaultConfig {
+    defaultConfig {
     applicationId = "com.aistudio.equbmanager.hyrwqt"
     minSdk = 24
     targetSdk = 35
