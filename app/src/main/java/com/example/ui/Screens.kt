@@ -13,7 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.items
 import kotlinx.coroutines.launch
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -134,7 +133,9 @@ fun EqubAppContent(viewModel: EqubViewModel) {
                     )
                     "sms" -> SmsScreen(
                         viewModel = viewModel,
-                        members = memberList
+                        members = memberList,
+                        equb = equb!!,
+                        installments = installmentList
                     )
                     "reports" -> ReportsScreen(
                         viewModel = viewModel,
@@ -417,6 +418,16 @@ fun HomeScreen(
     // Find if we have a lottery winner drawn for this cycle
     val cycleWinner = activeMembers.find { it.payoutRound == currentRound && it.payoutCycleIndex == currentCycle }
 
+    var selectedFilter by remember { mutableStateOf<String?>(null) }
+    val filteredMembersForStats = remember(selectedFilter, activeMembers, paidSumMap, equb.contribution) {
+        when (selectedFilter) {
+            "Paid" -> activeMembers.filter { (paidSumMap[it.id] ?: 0L) >= equb.contribution }
+            "Partial" -> activeMembers.filter { (paidSumMap[it.id] ?: 0L) in 1 until equb.contribution }
+            "Unpaid" -> activeMembers.filter { (paidSumMap[it.id] ?: 0L) == 0L }
+            else -> emptyList()
+        }
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -542,22 +553,90 @@ fun HomeScreen(
                     count = paidCount,
                     textColor = Color(0xFF16A34A),
                     bgColor = Color(0xFFDCFCE7),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        selectedFilter = if (selectedFilter == "Paid") null else "Paid"
+                    }
                 )
                 StatBadgeBox(
                     label = "Partial",
                     count = partialCount,
                     textColor = Color(0xFFD97706),
                     bgColor = Color(0xFFFEF3C7),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        selectedFilter = if (selectedFilter == "Partial") null else "Partial"
+                    }
                 )
                 StatBadgeBox(
                     label = "Unpaid",
                     count = unpaidCount,
                     textColor = Color(0xFFDC2626),
                     bgColor = Color(0xFFFEE2E2),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        selectedFilter = if (selectedFilter == "Unpaid") null else "Unpaid"
+                    }
                 )
+            }
+        }
+
+        if (selectedFilter != null) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "$selectedFilter Members",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF334155)
+                            )
+                            IconButton(onClick = { selectedFilter = null }, modifier = Modifier.size(24.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFF64748B), modifier = Modifier.size(16.dp))
+                            }
+                        }
+                        
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFFF1F5F9))
+
+                        if (filteredMembersForStats.isEmpty()) {
+                            Text("No members in this category.", fontSize = 12.sp, color = Color(0xFF94A3B8))
+                        } else {
+                            filteredMembersForStats.forEach { member ->
+                                val paid = paidSumMap[member.id] ?: 0L
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = member.name,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color(0xFF1E293B)
+                                    )
+                                    Text(
+                                        text = "$paid ETB",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF4F46E5)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -767,13 +846,14 @@ fun StatBadgeBox(
     count: Int,
     textColor: Color,
     bgColor: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
 ) {
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
-        modifier = modifier
+        modifier = modifier.clickable { onClick() }
     ) {
         Column(
             modifier = Modifier
@@ -1526,9 +1606,9 @@ fun MemberRowCard(
                     ) {
                         Button(
                             onClick = onRecordPayment,
-                            enabled = isWriteAuthorized,
+                            enabled = isWriteAuthorized && !isFullyPaid,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF4F46E5),
+                                containerColor = if (isFullyPaid) Color(0xFF10B981) else Color(0xFF4F46E5),
                                 disabledContainerColor = Color(0xFFCBD5E1)
                             ),
                             shape = RoundedCornerShape(10.dp),
@@ -1537,7 +1617,11 @@ fun MemberRowCard(
                                 .height(38.dp)
                                 .testTag("record_pay_btn_${member.id}")
                         ) {
-                            Text("Record Pay", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = if (isFullyPaid) "Paid Full" else "Record Pay",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
 
                         // Reminder button if partial or unpaid
@@ -1623,7 +1707,9 @@ fun MemberRowCard(
 @Composable
 fun SmsScreen(
     viewModel: EqubViewModel,
-    members: List<Member>
+    members: List<Member>,
+    equb: EqubGroup,
+    installments: List<Installment>
 ) {
     val currentRole by viewModel.currentRole.collectAsState()
     val isWriteAuthorized = currentRole != "MEMBER"
@@ -1632,10 +1718,23 @@ fun SmsScreen(
     val proposal by viewModel.parsedPaymentProposal.collectAsState()
     val searchQuery by viewModel.smsSearchQuery.collectAsState()
 
+    val currentRound = equb.currentRound
+    val currentCycle = equb.currentCycleIndex
+
     val activeMembers = members.filter { it.isActive }
-    val filteredMembers = activeMembers.filter { 
-        it.name.contains(searchQuery, ignoreCase = true) || 
-        it.phone.contains(searchQuery, ignoreCase = true)
+    
+    // Filter out members who have already fully paid for the current cycle
+    val filteredMembers = activeMembers.filter { member ->
+        val memberInstallments = installments.filter { 
+            it.memberId == member.id && it.round == currentRound && it.cycleIndex == currentCycle 
+        }
+        val totalPaid = memberInstallments.sumOf { it.amount }
+        val isNotFullyPaid = totalPaid < equb.contribution
+
+        isNotFullyPaid && (
+            member.name.contains(searchQuery, ignoreCase = true) || 
+            member.phone.contains(searchQuery, ignoreCase = true)
+        )
     }
 
     LazyColumn(

@@ -214,6 +214,14 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
             val memberName = dao.getMemberById(memberId)?.name ?: "Unknown"
             val eq = dao.getEqubGroup() ?: return@launch
             
+            // Prevent double payment if already fully paid
+            val currentInsts = dao.getInstallmentsForMember(memberId, eq.currentRound, eq.currentCycleIndex)
+            val totalPaid = currentInsts.sumOf { it.amount }
+            if (totalPaid >= eq.contribution) {
+                feedbackMessage.emit("Payment Rejected: $memberName has already fully paid for this cycle.")
+                return@launch
+            }
+
             val installment = Installment(
                 memberId = memberId,
                 round = eq.currentRound,
