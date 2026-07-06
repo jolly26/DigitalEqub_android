@@ -21,6 +21,10 @@ data class DiffItem(
 )
 
 object JsonBackup {
+    private const val MAX_JSON_LENGTH = 200_000 // guard against huge payloads
+    private const val MAX_MEMBERS = 5000
+    private const val MAX_INSTALLMENTS = 20000
+    private const val MAX_AUDITLOGS = 10000
 
     fun exportToString(
         equbGroup: EqubGroup?,
@@ -97,6 +101,12 @@ object JsonBackup {
     }
 
     fun parseBackup(jsonStr: String): BackupData? {
+        // Protect against extremely large or malicious payloads
+        if (jsonStr.length > MAX_JSON_LENGTH) {
+            Log.w("JsonBackup", "Backup JSON too large: ${jsonStr.length} bytes")
+            return null
+        }
+
         return try {
             val root = JSONObject(jsonStr)
 
@@ -121,6 +131,10 @@ object JsonBackup {
             val membersList = mutableListOf<Member>()
             if (root.has("members")) {
                 val arr = root.getJSONArray("members")
+                if (arr.length() > MAX_MEMBERS) {
+                    Log.w("JsonBackup", "Members count too large: ${arr.length()}")
+                    return null
+                }
                 for (idx in 0 until arr.length()) {
                     val mObj = arr.getJSONObject(idx)
                     val pRound = if (mObj.isNull("payoutRound")) null else mObj.getInt("payoutRound")
@@ -144,6 +158,10 @@ object JsonBackup {
             val installmentsList = mutableListOf<Installment>()
             if (root.has("installments")) {
                 val arr = root.getJSONArray("installments")
+                if (arr.length() > MAX_INSTALLMENTS) {
+                    Log.w("JsonBackup", "Installments count too large: ${arr.length()}")
+                    return null
+                }
                 for (idx in 0 until arr.length()) {
                     val iObj = arr.getJSONObject(idx)
                     installmentsList.add(
@@ -168,6 +186,10 @@ object JsonBackup {
             val logsList = mutableListOf<AuditLog>()
             if (root.has("auditLogs")) {
                 val arr = root.getJSONArray("auditLogs")
+                if (arr.length() > MAX_AUDITLOGS) {
+                    Log.w("JsonBackup", "Audit logs count too large: ${arr.length()}")
+                    return null
+                }
                 for (idx in 0 until arr.length()) {
                     val lObj = arr.getJSONObject(idx)
                     logsList.add(

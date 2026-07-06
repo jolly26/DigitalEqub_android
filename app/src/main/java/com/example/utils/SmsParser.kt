@@ -15,6 +15,8 @@ object SmsParser {
     fun parse(text: String): ParsedPayment? {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return null
+        // limit input length to avoid abusive large SMS input
+        if (trimmed.length > 2000) return null
 
         var bank = "Other"
         var amount: Long = 0
