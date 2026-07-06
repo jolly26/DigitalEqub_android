@@ -63,7 +63,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
         val suffixes = arrayOf("th", "st", "nd", "rd", "th", "th", "th", "th", "th", "th")
         return when (n % 100) {
             11, 12, 13 -> "${n}th"
-            else -> "${n}${suffixes[n % 10]}"
+            else -> "$n${suffixes[n % 10]}"
         }
     }
 
@@ -77,22 +77,11 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
                     details = details,
                     amount = amount,
                     performedBy = role,
-                )
+                ),
             )
         }
     }
 
-    // Role setup
-    fun setRole(role: String) {
-        viewModelScope.launch {
-            repository.updateRole(role)
-            currentRole.value = role
-            logAction("SET_ROLE", "User changed local role to $role")
-            feedbackMessage.emit("Role set to $role")
-        }
-    }
-
-    // Secure Role Update and Verification
     fun verifyAndSetRole(role: String, pin: String): Boolean {
         if (role == "MEMBER") {
             viewModelScope.launch {
@@ -151,7 +140,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
                 startDate = startDate,
                 currentRound = existing?.currentRound ?: 1,
                 currentCycleIndex = existing?.currentCycleIndex ?: 1,
-                roleSetting = existing?.roleSetting ?: "CHAIRMAN"
+                roleSetting = existing?.roleSetting ?: "CHAIRMAN",
             )
             repository.insertOrUpdateEqubGroup(newGroup)
             logAction("CREATE_EQUB", "Equb setup/updated: $name ($cycleType, contribution: $contribution ETB, start: $startDate)", contribution)
@@ -160,16 +149,26 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Member Management
-    fun addMember(name: String, phone: String) {
+    fun addMember(name: String, phone: String, isTeam: Boolean = false, participants: String? = null) {
         viewModelScope.launch {
             if (name.isBlank()) {
                 feedbackMessage.emit("Member name cannot be empty")
                 return@launch
             }
-            val member = Member(name = name.trim(), phone = phone.trim())
+            val member = Member(
+                name = name.trim(), 
+                phone = phone.trim(),
+                isTeam = isTeam,
+                teamParticipants = participants?.trim(),
+            )
             val id = repository.insertMember(member)
-            logAction("ADD_MEMBER", "Added member: ${member.name} (Phone: ${member.phone}), ID: $id")
-            feedbackMessage.emit("Added member: ${member.name}")
+            val logDetails = if (isTeam) {
+                "Added Team: ${member.name} (Participants: $participants)"
+            } else {
+                "Added member: ${member.name} (Phone: ${member.phone}), ID: $id"
+            }
+            logAction("ADD_MEMBER", logDetails)
+            feedbackMessage.emit("Added ${if (isTeam) "Team" else "Member"}: ${member.name}")
         }
     }
 
@@ -203,7 +202,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
         remarks: String,
         isVerified: Boolean = false,
         penaltyAmount: Long = 0,
-        senderName: String? = null
+        senderName: String? = null,
     ) {
         viewModelScope.launch {
             val member = repository.getMemberById(memberId)
@@ -212,10 +211,10 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
             
             // Prevent double payment if already fully paid
             val currentInsts = repository.getInstallmentsForMember(memberId, eq.currentRound, eq.currentCycleIndex)
-            val totalPaid = currentInsts.sumOf { it.amount }
-            if (totalPaid >= eq.contribution) {
-                feedbackMessage.emit("Payment Rejected: $memberName has already fully paid for this cycle.")
-                return@launch
+            
+            if (isMemberFullyPaid(member!!, currentInsts, eq.contribution)) {
+                 feedbackMessage.emit("Payment Rejected: $memberName has already fully paid for this cycle.")
+                 return@launch
             }
 
             val contributionCount = currentInsts.size + 1
@@ -230,7 +229,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
                 remarks = remarks.trim(),
                 isVerified = isVerified,
                 penaltyAmount = penaltyAmount,
-                senderName = senderName?.trim()
+                senderName = senderName?.trim(),
             )
             
             repository.insertInstallment(installment)
@@ -243,10 +242,29 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
             logAction(
                 "ADD_INSTALLMENT", 
                 logDetails,
-                amount
+                amount,
             )
             val ordinalStr = toOrdinal(contributionCount)
             feedbackMessage.emit("Selam $memberName, you've made your $ordinalStr contribution, thank you!")
+        }
+    }
+
+    fun isMemberFullyPaid(member: Member, installments: List<Installment>, contribution: Long): Boolean {
+        val memberInsts = installments.filter { it.memberId == member.id }
+        val totalPaid = memberInsts.sumOf { it.amount }
+        
+        return if (member.isTeam && (member.teamParticipants != null)) {
+            val participants = member.teamParticipants.split(",").asSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+            if (participants.isEmpty()) {
+                totalPaid >= contribution
+            } else {
+                val share = contribution / participants.size
+                participants.all { p ->
+                    memberInsts.asSequence().filter { it.senderName?.trim().equals(p, ignoreCase = true) }.sumOf { it.amount } >= share
+                }
+            }
+        } else {
+            totalPaid >= contribution
         }
     }
 
@@ -283,12 +301,12 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
         var allMembersPaidAndVerified = true
         for (m in activeMembers) {
             val memberInsts = installments.filter { 
-                it.memberId == m.id && it.round == currentRound && it.cycleIndex == currentCycle 
+                (it.memberId == m.id) && (it.round == currentRound) && (it.cycleIndex == currentCycle)
             }
-            val totalPaid = memberInsts.sumOf { it.amount }
+            val fullyPaid = isMemberFullyPaid(m, memberInsts, eq.contribution)
             val allVerified = memberInsts.all { it.isVerified }
             
-            if (totalPaid < eq.contribution || !allVerified || memberInsts.isEmpty()) {
+            if (!fullyPaid || !allVerified || memberInsts.isEmpty()) {
                 allMembersPaidAndVerified = false
                 break
             }
@@ -296,11 +314,11 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
 
         if (allMembersPaidAndVerified) {
             // 1. Draw winner if not already set
-            val currentWinner = allMembers.find { it.payoutRound == currentRound && it.payoutCycleIndex == currentCycle }
+            val currentWinner = allMembers.find { (it.payoutRound == currentRound) && (it.payoutCycleIndex == currentCycle) }
             var winnerName = currentWinner?.name
             
             if (currentWinner == null) {
-                val eligible = activeMembers.filter { it.payoutRound != currentRound || it.payoutCycleIndex == null }
+                val eligible = activeMembers.filter { (it.payoutRound != currentRound) || (it.payoutCycleIndex == null) }
                 if (eligible.isNotEmpty()) {
                     val newWinner = eligible.random()
                     winnerName = newWinner.name
@@ -312,7 +330,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
             feedbackMessage.emit("Cycle $currentCycle Complete! All payments verified. Winner: ${winnerName ?: "Unknown"}")
 
             // 2. Advance cycle or start next round
-            val stillEligible = activeMembers.count { it.payoutRound != currentRound || it.payoutCycleIndex == null }
+            val stillEligible = activeMembers.count { (it.payoutRound != currentRound) || (it.payoutCycleIndex == null) }
             if (stillEligible == 0) {
                 // Round complete
                 val nextRound = currentRound + 1
@@ -361,7 +379,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             // Find members who have not yet received payout in this current round
-            val eligible = activeMembers.filter { it.payoutRound != eq.currentRound || it.payoutCycleIndex == null }
+            val eligible = activeMembers.filter { (it.payoutRound != eq.currentRound) || (it.payoutCycleIndex == null) }
             if (eligible.isEmpty()) {
                 feedbackMessage.emit("All members have received payout for Round ${eq.currentRound}!")
                 return@launch
@@ -402,7 +420,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val eq = repository.getEqubGroup() ?: return@launch
             val allMembers = repository.getAllMembers()
-            val currentWinner = allMembers.find { it.payoutRound == eq.currentRound && it.payoutCycleIndex == eq.currentCycleIndex }
+            val currentWinner = allMembers.find { (it.payoutRound == eq.currentRound) && (it.payoutCycleIndex == eq.currentCycleIndex) }
             if (currentWinner != null) {
                 repository.setMemberPayout(currentWinner.id, null, null, null)
                 logAction("CLEAR_WINNER", "Cleared winner marker for ${currentWinner.name} in Rd ${eq.currentRound} Month ${eq.currentCycleIndex}")
@@ -459,7 +477,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
         smsInputText.value = text
         val result = SmsParser.parse(text)
         parsedPaymentProposal.value = result
-        if (result == null && text.isNotBlank()) {
+        if ((result == null) && text.isNotBlank()) {
             viewModelScope.launch {
                 feedbackMessage.emit("Could not parse. Please try a different SMS format or enter manually.")
             }
@@ -475,7 +493,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
             referenceNumber = proposal.reference,
             remarks = "SMS Autoparse (${proposal.date})",
             isVerified = false, // Keep unverified until final checked (always safe)
-            senderName = if (proposal.senderName.isNotBlank()) proposal.senderName else null
+            senderName = proposal.senderName.ifBlank { null },
         )
         parsedPaymentProposal.value = null
         smsInputText.value = ""
@@ -507,7 +525,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
                 members = localMembers,
                 installments = localInstallments,
                 auditLogs = localLogs,
-                roleSetting = currentRole.value
+                roleSetting = currentRole.value,
             )
 
             val diff = JsonBackup.calculateDiff(localBackup, incoming)
@@ -557,7 +575,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     fun generateReminderText(member: Member, expectedAmount: Long, paidAmount: Long): String {
         val equbName = equbGroup.value?.name ?: "Equb"
         val pending = expectedAmount - paidAmount
-        return "Selam ${member.name}, this is a friendly reminder from $equbName organizer. Your contribution for this month is ${expectedAmount} ETB, you have paid ${paidAmount} ETB so far. Pending balance of ${pending} ETB is due. Please deposit to our bank account. Thank you!"
+        return "Selam ${member.name}, this is a friendly reminder from $equbName organizer. Your contribution for this month is $expectedAmount ETB, you have paid $paidAmount ETB so far. Pending balance of $pending ETB is due. Please deposit to our bank account. Thank you!"
     }
 
     // Generate Monthly Summary text for sharing on Telegram / WhatsApp
@@ -567,10 +585,10 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
         totalPending: Long,
         paidCount: Int,
         totalCount: Int,
-        winnerName: String?
+        winnerName: String?,
     ): String {
         val eq = equbGroup.value ?: return "No Equb Active"
-        val progressPercent = if (totalExpected > 0) (totalCollected * 100 / totalExpected) else 0
+        val progressPercent = if (totalExpected > 0) ((totalCollected * 100) / totalExpected) else 0
         return """
             --- 🇪🇹 ${eq.name} ---
             Round: ${eq.currentRound} | Cycle Month: ${eq.currentCycleIndex}

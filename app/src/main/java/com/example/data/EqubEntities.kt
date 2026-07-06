@@ -21,6 +21,8 @@ data class Member(
     val name: String,
     val phone: String,
     val isActive: Boolean = true,
+    val isTeam: Boolean = false,
+    val teamParticipants: String? = null, // Comma-separated names for group tickets
     // Payout fields for the current round
     val payoutRound: Int? = null,
     val payoutCycleIndex: Int? = null,

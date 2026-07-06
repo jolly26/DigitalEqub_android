@@ -6,6 +6,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -41,12 +42,12 @@ fun MembersScreen(
     viewModel: EqubViewModel,
     equb: EqubGroup,
     members: List<Member>,
-    installments: List<Installment>
+    installments: List<Installment>,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var searchQuery by remember { mutableStateOf("") }
-    var showAddDialog by remember { mutableStateOf(false) }
+    var showAddDialog by remember { mutableStateOf(value = false) }
     var showPaymentDialogForMember by remember { mutableStateOf<Member?>(null) }
 
     val currentRole by viewModel.currentRole.collectAsState()
@@ -79,22 +80,40 @@ fun MembersScreen(
             }
         }
 
-        Text(text = "Equb Directory (${filteredMembers.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
+        Text(
+            text = "Equb Directory (${filteredMembers.size})",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF475569),
+        )
 
         if (filteredMembers.isEmpty()) {
             Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { Text(text = if (searchQuery.isEmpty()) "No members added to this Equb yet." else "No matches found.", fontSize = 14.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Medium) }
         } else {
             LazyColumn(modifier = Modifier.weight(1f).testTag("members_list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(filteredMembers) { member ->
-                    MemberRowCard(member = member, equb = equb, installments = installments.filter { it.memberId == member.id && it.round == equb.currentRound && it.cycleIndex == equb.currentCycleIndex }, isChairman = member.id == chairmanId, isCoChair = member.id == coChairId, isWriteAuthorized = isWriteAuthorized, onToggleActive = { viewModel.toggleMemberActive(member) }, onDelete = { viewModel.deleteMember(member) }, onRecordPayment = { showPaymentDialogForMember = member }, onSendReminder = { 
-                        val paySum = installments.filter { it.memberId == member.id && it.round == equb.currentRound && it.cycleIndex == equb.currentCycleIndex }.sumOf { it.amount }
-                        val text = viewModel.generateReminderText(member, equb.contribution, paySum)
-                        val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, text) }
-                        val shareIntent = Intent.createChooser(intent, "Send Reminder via")
-                        coroutineScope.launch { viewModel.feedbackMessage.emit("Prepared reminder for ${member.name}") }
-                        context.startActivity(shareIntent)
-                    }, onPayoutClick = { viewModel.setManualWinner(member.id) })
+                    MemberRowCard(
+                        member = member,
+                        equb = equb,
+                        installments = installments.asSequence().filter { (it.memberId == member.id) && (it.round == equb.currentRound) && (it.cycleIndex == equb.currentCycleIndex) }.toList(),
+                        isChairman = member.id == chairmanId,
+                        isCoChair = member.id == coChairId,
+                        isWriteAuthorized = isWriteAuthorized,
+                        onToggleActive = { viewModel.toggleMemberActive(member) },
+                        onDelete = { viewModel.deleteMember(member) },
+                        onRecordPayment = { showPaymentDialogForMember = member },
+                        onSendReminder = { 
+                            val paySum = installments.asSequence().filter { (it.memberId == member.id) && (it.round == equb.currentRound) && (it.cycleIndex == equb.currentCycleIndex) }.sumOf { it.amount }
+                            val text = viewModel.generateReminderText(member, equb.contribution, paySum)
+                            val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, text) }
+                            val shareIntent = Intent.createChooser(intent, "Send Reminder via")
+                            coroutineScope.launch { viewModel.feedbackMessage.emit("Prepared reminder for ${member.name}") }
+                            context.startActivity(shareIntent)
+                        }
+                    ) {
+                        viewModel.setManualWinner(member.id)
+                    }
                 }
             }
         }
@@ -103,20 +122,63 @@ fun MembersScreen(
     if (showAddDialog) {
         var name by remember { mutableStateOf("") }
         var phone by remember { mutableStateOf("") }
+        var isTeam by remember { mutableStateOf(value = false) }
+        var participants by remember { mutableStateOf("") }
         Dialog(onDismissRequest = { showAddDialog = false }) {
             Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.fillMaxWidth().padding(16.dp).imePadding()) {
                 Box(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 80.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(text = "Add New Equb Member", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1E293B))
                         Spacer(modifier = Modifier.height(4.dp))
-                        DoubleTapOutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Member Full Name") }, modifier = Modifier.fillMaxWidth().testTag("new_member_name_input"), shape = RoundedCornerShape(12.dp), singleLine = true)
-                        DoubleTapOutlinedTextField(value = phone, onValueChange = { if (it.all { char -> char.isDigit() || char == '+' }) phone = it }, label = { Text("Phone Number (e.g. 0911223344)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth().testTag("new_member_phone_input"), shape = RoundedCornerShape(12.dp), singleLine = true)
+                        DoubleTapOutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(if (isTeam) "Team/Group Name" else "Member Full Name") }, modifier = Modifier.fillMaxWidth().testTag("new_member_name_input"), shape = RoundedCornerShape(12.dp), singleLine = true)
+                        DoubleTapOutlinedTextField(
+                            value = phone,
+                            onValueChange = { if (it.all { char -> char.isDigit() || (char == '+') }) phone = it },
+                            label = { Text("Phone Number (e.g. 0911223344)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth().testTag("new_member_phone_input"),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+                        
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp).clickable { isTeam = !isTeam }) {
+                            Checkbox(checked = isTeam, onCheckedChange = { isTeam = it })
+                            Text("This is a Team/Group ticket", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        }
+
+                        if (isTeam) {
+                            DoubleTapOutlinedTextField(
+                                value = participants,
+                                onValueChange = { participants = it },
+                                label = { Text("Participants (Comma-separated)") },
+                                placeholder = { Text("e.g. Abebe, Kebede, Chala") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                singleLine = true
+                            )
+                            Text("The contribution will be split equally between participants.", fontSize = 11.sp, color = Color(0xFF64748B))
+                        }
                     }
                     Row(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.White).padding(horizontal = 24.dp, vertical = 16.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showAddDialog = false }) { Text("Cancel", color = Color(0xFF64748B)) }
                         Spacer(modifier = Modifier.width(8.dp))
-                        Button(onClick = { if (name.isNotBlank()) { viewModel.addMember(name, phone)
-                                    showAddDialog = false } }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)), modifier = Modifier.testTag("save_member_button")) { Text("Save Member") }
+                        Button(
+                            onClick = { 
+                                if (name.isNotBlank()) {
+                                    viewModel.addMember(
+                                        name,
+                                        phone,
+                                        isTeam,
+                                        if (isTeam) participants.ifBlank { null } else null,
+                                    )
+                                    showAddDialog = false
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
+                            modifier = Modifier.testTag("save_member_button"),
+                        ) {
+                            Text("Save Member")
+                        }
                     }
                 }
             }
@@ -144,7 +206,24 @@ fun MembersScreen(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) { methods.take(3).forEach { mthd -> Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(if (method == mthd) Color(0xFF4F46E5) else Color(0xFFF1F5F9)).clickable { method = mthd }.padding(vertical = 8.dp), contentAlignment = Alignment.Center) { Text(text = mthd, color = if (method == mthd) Color.White else Color(0xFF475569), fontSize = 11.sp, fontWeight = FontWeight.Bold) } } }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) { methods.drop(3).forEach { mthd -> Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(if (method == mthd) Color(0xFF4F46E5) else Color(0xFFF1F5F9)).clickable { method = mthd }.padding(vertical = 8.dp), contentAlignment = Alignment.Center) { Text(text = mthd, color = if (method == mthd) Color.White else Color(0xFF475569), fontSize = 11.sp, fontWeight = FontWeight.Bold) } } }
                         
-                        DoubleTapOutlinedTextField(value = senderName, onValueChange = { senderName = it }, label = { Text("Sender Name (if not ${member.name})") }, placeholder = { Text("e.g. Spouse name, or 'Cash'") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), singleLine = true)
+                        if (member.isTeam && (member.teamParticipants != null)) {
+                            val participants = member.teamParticipants.split(",").asSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+                            Text("Select Participant Paying", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                participants.forEach { p ->
+                                val pPaid = installments.asSequence().filter { it.senderName?.trim().equals(p, ignoreCase = true) }.sumOf { it.amount }
+                                val share = equb.contribution / participants.size
+                                    val isPFull = pPaid >= share
+                                    
+                                    Box(modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(if (senderName == p) Color(0xFF4F46E5) else if (isPFull) Color(0xFFDCFCE7) else Color(0xFFF1F5F9)).clickable { senderName = p }.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                        Text(text = if (isPFull) "$p (Paid)" else p, color = if (senderName == p) Color.White else if (isPFull) Color(0xFF16A34A) else Color(0xFF475569), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        } else {
+                            DoubleTapOutlinedTextField(value = senderName, onValueChange = { senderName = it }, label = { Text("Sender Name (if not ${member.name})") }, placeholder = { Text("e.g. Spouse name, or 'Cash'") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), singleLine = true)
+                        }
+
                         DoubleTapOutlinedTextField(value = reference, onValueChange = { reference = it }, label = { Text("Reference Number (Optional)") }, modifier = Modifier.fillMaxWidth().testTag("payment_reference_input"), shape = RoundedCornerShape(12.dp), singleLine = true)
                         DoubleTapOutlinedTextField(value = remarks, onValueChange = { remarks = it }, label = { Text("Remarks (e.g. Late fine paid)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), singleLine = true)
                         if (currentRole == "CHAIRMAN") { Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) { Checkbox(checked = verifyImmediately, onCheckedChange = { verifyImmediately = it })
@@ -153,7 +232,9 @@ fun MembersScreen(
                     Row(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.White).padding(horizontal = 24.dp, vertical = 16.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showPaymentDialogForMember = null }) { Text("Cancel", color = Color(0xFF64748B)) }
                         Spacer(modifier = Modifier.width(8.dp))
-                        Button(onClick = { val amount = amountStr.toLongOrNull() ?: 0
+                        Button(
+                            onClick = { 
+                                val amount = amountStr.toLongOrNull() ?: 0
                                 if (amount > 0) { 
                                     viewModel.addInstallment(
                                         memberId = member.id, 
@@ -162,9 +243,16 @@ fun MembersScreen(
                                         referenceNumber = reference, 
                                         remarks = remarks, 
                                         isVerified = verifyImmediately,
-                                        senderName = if (senderName.isNotBlank()) senderName else null
+                                        senderName = senderName.ifBlank { null }
                                     )
-                                    showPaymentDialogForMember = null } }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)), modifier = Modifier.testTag("payment_submit_button")) { Text("Confirm Payment") }
+                                    showPaymentDialogForMember = null
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
+                            modifier = Modifier.testTag("payment_submit_button")
+                        ) {
+                            Text("Confirm Payment")
+                        }
                     }
                 }
             }
@@ -186,10 +274,24 @@ fun MemberRowCard(
     onSendReminder: () -> Unit,
     onPayoutClick: () -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(value = false) }
     val totalPaid = installments.sumOf { it.amount }
-    val isFullyPaid = totalPaid >= equb.contribution
-    val isPartial = totalPaid > 0 && totalPaid < equb.contribution
+    
+    val isFullyPaid = if (member.isTeam && (member.teamParticipants != null)) {
+        val participants = member.teamParticipants.split(",").asSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        if (participants.isEmpty()) {
+            totalPaid >= equb.contribution
+        } else {
+            val share = equb.contribution / participants.size
+            participants.all { p ->
+                installments.asSequence().filter { it.senderName?.trim().equals(p, ignoreCase = true) }.sumOf { it.amount } >= share
+            }
+        }
+    } else {
+        totalPaid >= equb.contribution
+    }
+    
+    val isPartial = (totalPaid > 0) && !isFullyPaid
     val statusText = when {
         isFullyPaid -> "Paid (ሙሉ የከፈሉ)"
         isPartial -> "Partial (ከፊል)"
@@ -205,7 +307,9 @@ fun MemberRowCard(
         isPartial -> Color(0xFFFEF3C7)
         else -> Color(0xFFFEE2E2)
     }
-    val initials = if (member.name.isNotBlank()) member.name.split(" ").asSequence().take(2).map { it.take(1) }.joinToString("").uppercase() else "UN"
+    val initials = if (member.name.isNotBlank()) {
+        member.name.split(" ").take(2).joinToString("") { it.take(1) }.uppercase()
+    } else "UN"
 
     Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White), border = BorderStroke(1.dp, if (expanded) Color(0xFF4F46E5) else Color(0xFFF1F5F9)), modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.testTag("member_card_${member.id}")) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -226,6 +330,24 @@ fun MemberRowCard(
             AnimatedVisibility(visible = expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     HorizontalDivider(color = Color(0xFFF1F5F9))
+                    
+                    if (member.isTeam && (member.teamParticipants != null)) {
+                        val participants = member.teamParticipants.split(",").asSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+                        if (participants.isNotEmpty()) {
+                            val share = equb.contribution / participants.size
+                            Text("Team Progress (Share: $share ETB each)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4F46E5))
+                            participants.forEach { p ->
+                                val pPaid = installments.asSequence().filter { it.senderName?.trim().equals(p, ignoreCase = true) }.sumOf { it.amount }
+                                val isPFull = pPaid >= share
+                                Row(modifier = Modifier.fillMaxWidth().padding(start = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("• $p", fontSize = 12.sp, color = if (isPFull) Color(0xFF16A34A) else Color(0xFF334155))
+                                    Text(if (isPFull) "Paid" else "Due: ${share - pPaid}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isPFull) Color(0xFF16A34A) else Color(0xFFDC2626))
+                                }
+                            }
+                            HorizontalDivider(color = Color(0xFFF1F5F9))
+                        }
+                    }
+
                     if (installments.isNotEmpty()) {
                         Text("Cycle Installments list:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B))
                         installments.forEach { inst ->
