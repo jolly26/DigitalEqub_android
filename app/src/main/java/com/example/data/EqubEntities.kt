@@ -39,7 +39,8 @@ data class Installment(
     val referenceNumber: String,
     val remarks: String,
     val isVerified: Boolean = false, // false = paid (belief), true = verified (cross-checked)
-    val penaltyAmount: Long = 0
+    val penaltyAmount: Long = 0,
+    val senderName: String? = null // For third-party payments (e.g., wife's name or cash source)
 )
 
 @Entity(tableName = "audit_logs")

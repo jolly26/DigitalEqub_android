@@ -129,6 +129,7 @@ fun MembersScreen(
         var method by remember { mutableStateOf("CBE") }
         var reference by remember { mutableStateOf("") }
         var remarks by remember { mutableStateOf("") }
+        var senderName by remember { mutableStateOf("") }
         var verifyImmediately by remember(currentRole) { mutableStateOf(currentRole == "CHAIRMAN") }
         Dialog(onDismissRequest = { showPaymentDialogForMember = null }) {
             Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.fillMaxWidth().padding(16.dp).imePadding()) {
@@ -137,10 +138,13 @@ fun MembersScreen(
                         Text(text = "Record Contribution payment", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1E293B))
                         Text("Adding payment for ${member.name}", fontSize = 13.sp, color = Color(0xFF64748B))
                         DoubleTapOutlinedTextField(value = amountStr, onValueChange = { if (it.all { char -> char.isDigit() }) amountStr = it }, label = { Text("Amount (ETB)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth().testTag("payment_amount_input"), shape = RoundedCornerShape(12.dp), singleLine = true)
+                        
                         Text("Payment Method", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         val methods = listOf("CBE", "Telebirr", "Dashen", "Awash", "Cash", "Other")
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) { methods.take(3).forEach { mthd -> Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(if (method == mthd) Color(0xFF4F46E5) else Color(0xFFF1F5F9)).clickable { method = mthd }.padding(vertical = 8.dp), contentAlignment = Alignment.Center) { Text(text = mthd, color = if (method == mthd) Color.White else Color(0xFF475569), fontSize = 11.sp, fontWeight = FontWeight.Bold) } } }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) { methods.drop(3).forEach { mthd -> Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(if (method == mthd) Color(0xFF4F46E5) else Color(0xFFF1F5F9)).clickable { method = mthd }.padding(vertical = 8.dp), contentAlignment = Alignment.Center) { Text(text = mthd, color = if (method == mthd) Color.White else Color(0xFF475569), fontSize = 11.sp, fontWeight = FontWeight.Bold) } } }
+                        
+                        DoubleTapOutlinedTextField(value = senderName, onValueChange = { senderName = it }, label = { Text("Sender Name (if not ${member.name})") }, placeholder = { Text("e.g. Spouse name, or 'Cash'") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), singleLine = true)
                         DoubleTapOutlinedTextField(value = reference, onValueChange = { reference = it }, label = { Text("Reference Number (Optional)") }, modifier = Modifier.fillMaxWidth().testTag("payment_reference_input"), shape = RoundedCornerShape(12.dp), singleLine = true)
                         DoubleTapOutlinedTextField(value = remarks, onValueChange = { remarks = it }, label = { Text("Remarks (e.g. Late fine paid)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), singleLine = true)
                         if (currentRole == "CHAIRMAN") { Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) { Checkbox(checked = verifyImmediately, onCheckedChange = { verifyImmediately = it })
@@ -150,7 +154,16 @@ fun MembersScreen(
                         TextButton(onClick = { showPaymentDialogForMember = null }) { Text("Cancel", color = Color(0xFF64748B)) }
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(onClick = { val amount = amountStr.toLongOrNull() ?: 0
-                                if (amount > 0) { viewModel.addInstallment(memberId = member.id, amount = amount, paymentMethod = method, referenceNumber = reference, remarks = remarks, isVerified = verifyImmediately)
+                                if (amount > 0) { 
+                                    viewModel.addInstallment(
+                                        memberId = member.id, 
+                                        amount = amount, 
+                                        paymentMethod = method, 
+                                        referenceNumber = reference, 
+                                        remarks = remarks, 
+                                        isVerified = verifyImmediately,
+                                        senderName = if (senderName.isNotBlank()) senderName else null
+                                    )
                                     showPaymentDialogForMember = null } }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)), modifier = Modifier.testTag("payment_submit_button")) { Text("Confirm Payment") }
                     }
                 }

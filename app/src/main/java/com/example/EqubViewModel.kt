@@ -58,6 +58,15 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
         return sdf.format(Date())
     }
 
+    private fun toOrdinal(n: Int): String {
+        if (n <= 0) return n.toString()
+        val suffixes = arrayOf("th", "st", "nd", "rd", "th", "th", "th", "th", "th", "th")
+        return when (n % 100) {
+            11, 12, 13 -> "${n}th"
+            else -> "${n}${suffixes[n % 10]}"
+        }
+    }
+
     private fun logAction(action: String, details: String, amount: Long = 0) {
         viewModelScope.launch {
             val role = currentRole.value
@@ -193,10 +202,12 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
         referenceNumber: String,
         remarks: String,
         isVerified: Boolean = false,
-        penaltyAmount: Long = 0
+        penaltyAmount: Long = 0,
+        senderName: String? = null
     ) {
         viewModelScope.launch {
-            val memberName = repository.getMemberById(memberId)?.name ?: "Unknown"
+            val member = repository.getMemberById(memberId)
+            val memberName = member?.name ?: "Unknown"
             val eq = repository.getEqubGroup() ?: return@launch
             
             // Prevent double payment if already fully paid
@@ -207,6 +218,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
+            val contributionCount = currentInsts.size + 1
             val installment = Installment(
                 memberId = memberId,
                 round = eq.currentRound,
@@ -217,17 +229,24 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
                 referenceNumber = referenceNumber.trim(),
                 remarks = remarks.trim(),
                 isVerified = isVerified,
-                penaltyAmount = penaltyAmount
+                penaltyAmount = penaltyAmount,
+                senderName = senderName?.trim()
             )
             
             repository.insertInstallment(installment)
             val stateStr = if (isVerified) "Verified" else "Unverified (Paid Belief)"
+            val logDetails = if (senderName.isNullOrBlank()) {
+                "Recorded payment of $amount ETB for $memberName in Rd ${eq.currentRound} Month ${eq.currentCycleIndex} ($stateStr, Ref: $referenceNumber)"
+            } else {
+                "Recorded payment of $amount ETB for $memberName (via $senderName) in Rd ${eq.currentRound} Month ${eq.currentCycleIndex} ($stateStr, Ref: $referenceNumber)"
+            }
             logAction(
                 "ADD_INSTALLMENT", 
-                "Recorded payment of $amount ETB for $memberName in Rd ${eq.currentRound} Month ${eq.currentCycleIndex} ($stateStr, Ref: $referenceNumber)",
+                logDetails,
                 amount
             )
-            feedbackMessage.emit("Recorded $amount ETB for $memberName")
+            val ordinalStr = toOrdinal(contributionCount)
+            feedbackMessage.emit("Selam $memberName, you've made your $ordinalStr contribution, thank you!")
         }
     }
 
@@ -454,8 +473,9 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
             amount = proposal.amount,
             paymentMethod = proposal.bank,
             referenceNumber = proposal.reference,
-            remarks = "SMS Autoparse: ${proposal.senderName} (${proposal.date})",
-            isVerified = false // Keep unverified until final checked (always safe)
+            remarks = "SMS Autoparse (${proposal.date})",
+            isVerified = false, // Keep unverified until final checked (always safe)
+            senderName = if (proposal.senderName.isNotBlank()) proposal.senderName else null
         )
         parsedPaymentProposal.value = null
         smsInputText.value = ""
