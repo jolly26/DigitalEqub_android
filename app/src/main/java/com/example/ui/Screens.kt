@@ -13,19 +13,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.items
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -44,8 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.EqubViewModel
 import com.example.data.*
-import com.example.utils.DiffItem
-import com.example.utils.ParsedPayment
 import androidx.compose.ui.window.Dialog
 import java.text.SimpleDateFormat
 import java.util.*
@@ -70,7 +67,7 @@ fun EqubAppContent(viewModel: EqubViewModel) {
     val currentRole by viewModel.currentRole.collectAsState()
     val feedbackMessage = viewModel.feedbackMessage
 
-    var showRoleSecurityDialog by remember { mutableStateOf(false) }
+    var showRoleSecurityDialog by remember { mutableStateOf(value = false) }
 
     // Collect toasts
     LaunchedEffect(key1 = true) {
@@ -82,7 +79,7 @@ fun EqubAppContent(viewModel: EqubViewModel) {
     if (showRoleSecurityDialog) {
         RoleSecurityDialog(
             viewModel = viewModel,
-            onDismiss = { showRoleSecurityDialog = false }
+            onDismiss = { showRoleSecurityDialog = false },
         )
     }
 
@@ -1954,7 +1951,7 @@ fun ReportsScreen(
     logs: List<AuditLog>
 ) {
     val context = LocalContext.current
-    var selectedReportSubTab by remember { mutableStateOf("grid") } // "grid", "audits", "unpaid"
+    var selectedReportSubTab by remember { mutableStateOf("dashboard") } // "dashboard", "ledger", "audits"
     var searchQuery by remember { mutableStateOf("") }
 
     val activeMembers = members.filter { it.isActive }
@@ -1970,6 +1967,9 @@ fun ReportsScreen(
     val collectedTotal = currentRoundInstallments.sumOf { it.amount }
     val pendingTotal = maxOf(0L, expectedTotal - collectedTotal)
     val winner = activeMembers.find { it.payoutRound == currentRound && it.payoutCycleIndex == currentCycle }
+    
+    val paidCount = activeMembers.count { (paidSumMap[it.id] ?: 0L) >= equb.contribution }
+    val collectionProgress = if (expectedTotal > 0L) collectedTotal.toFloat() / expectedTotal.toFloat() else 0f
 
     Column(
         modifier = Modifier
@@ -1983,7 +1983,7 @@ fun ReportsScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            listOf("grid" to "Monthly Ledger", "audits" to "Audit Trail", "unpaid" to "Outstanding").forEach { (tabId, label) ->
+            listOf("dashboard" to "Dashboard", "ledger" to "Ledger", "audits" to "Audits").forEach { (tabId, label) ->
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -2003,44 +2003,116 @@ fun ReportsScreen(
             }
         }
 
-        // SHARE TEXT SUMMARY ACTION
-        Button(
-            onClick = {
-                val reportSummary = viewModel.generateSummaryReportText(
-                    totalExpected = expectedTotal,
-                    totalCollected = collectedTotal,
-                    totalPending = pendingTotal,
-                    paidCount = activeMembers.count { (paidSumMap[it.id] ?: 0L) >= equb.contribution },
-                    totalCount = activeMembers.size,
-                    winnerName = winner?.name
-                )
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, reportSummary)
-                }
-                context.startActivity(Intent.createChooser(intent, "Share Report Summary"))
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(44.dp)
-                .testTag("share_summary_report_button")
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                Text("Share Monthly Summary to Telegram/WhatsApp", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-
-        HorizontalDivider(color = Color(0xFFE2E8F0))
-
         // VIEW RENDERING BASED ON SUB TAB
         when (selectedReportSubTab) {
-            "grid" -> {
+            "dashboard" -> {
+                Column(
+                    modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Progress Card
+                    Card(
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Collection Progress", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF64748B))
+                                Text("${(collectionProgress * 100).toInt()}%", fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color(0xFF4F46E5))
+                            }
+                            LinearProgressIndicator(
+                                progress = { collectionProgress },
+                                modifier = Modifier.fillMaxWidth().height(10.dp).clip(CircleShape),
+                                color = Color(0xFF4F46E5),
+                                trackColor = Color(0xFFEEF2F6)
+                            )
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("$paidCount of ${activeMembers.size} Paid", fontSize = 12.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Medium)
+                                Text("$collectedTotal / $expectedTotal ETB", fontSize = 12.sp, color = Color(0xFF1E293B), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    // Stats Grid
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFECFDF5))
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Icon(Icons.AutoMirrored.Filled.TrendingUp, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("Collected", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF065F46))
+                                Text("$collectedTotal ETB", fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFF065F46))
+                            }
+                        }
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2))
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Icon(Icons.AutoMirrored.Filled.TrendingDown, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("Pending", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF991B1B))
+                                Text("$pendingTotal ETB", fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFF991B1B))
+                            }
+                        }
+                    }
+
+                    // Winner Highlight
+                    if (winner != null) {
+                        Card(
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF4F46E5)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(Icons.Default.Stars, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+                                Column {
+                                    Text("CURRENT CYCLE WINNER (ዕጣ)", color = Color(0xFFC7D2FE), fontSize = 9.sp, fontWeight = FontWeight.Black)
+                                    Text(winner.name, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    // Action Button
+                    Button(
+                        onClick = {
+                            val reportSummary = viewModel.generateSummaryReportText(
+                                totalExpected = expectedTotal,
+                                totalCollected = collectedTotal,
+                                totalPending = pendingTotal,
+                                paidCount = paidCount,
+                                totalCount = activeMembers.size,
+                                winnerName = winner?.name
+                            )
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, reportSummary)
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Share Report Summary"))
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth().height(52.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Text("Share Report to Members", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+            
+            "ledger" -> {
                 // Monthly Collection Grid list
                 Text("Members Contribution Audit", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 
@@ -2147,54 +2219,6 @@ fun ReportsScreen(
                                     if (log.amount > 0) {
                                         Text("${log.amount} ETB", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
                                     }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            "unpaid" -> {
-                // Unpaid lists
-                val outstandingMembers = activeMembers.filter { (paidSumMap[it.id] ?: 0L) < equb.contribution }
-
-                Text("Outstanding Balances (${outstandingMembers.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-
-                if (outstandingMembers.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                        Text("Everyone is paid in full for this cycle! 🎉", fontSize = 13.sp, color = Color(0xFF16A34A), fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f).testTag("reports_outstanding"),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(outstandingMembers) { m ->
-                            val totalPaid = paidSumMap[m.id] ?: 0L
-                            val remaining = equb.contribution - totalPaid
-                            
-                            Card(
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
-                                border = BorderStroke(1.dp, Color(0xFFF1F5F9))
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(14.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(m.name, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                        Text("Paid: $totalPaid ETB", fontSize = 11.sp, color = Color(0xFF64748B))
-                                    }
-                                    Text(
-                                        text = "Due: $remaining ETB", 
-                                        fontSize = 13.sp, 
-                                        fontWeight = FontWeight.ExtraBold, 
-                                        color = Color(0xFFEF4444)
-                                    )
                                 }
                             }
                         }
