@@ -177,7 +177,7 @@ fun InitialSetupScreen(
                 DoubleTapOutlinedTextField(
                     value = contributionStr,
                     onValueChange = { if (it.all { char -> char.isDigit() }) contributionStr = it },
-                    label = { Text("Monthly Contribution (ETB)") },
+                    label = { Text("$cycleType Contribution (ETB)") },
                     placeholder = { Text("e.g., 5000") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth().testTag("setup_equb_contribution"),
