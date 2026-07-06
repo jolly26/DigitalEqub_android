@@ -35,6 +35,7 @@ import com.example.EqubViewModel
 import com.example.data.*
 import com.example.ui.components.DoubleTapOutlinedTextField
 import kotlinx.coroutines.launch
+import com.example.utils.Validation
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -163,16 +164,26 @@ fun MembersScreen(
                         TextButton(onClick = { showAddDialog = false }) { Text("Cancel", color = Color(0xFF64748B)) }
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(
-                            onClick = { 
-                                if (name.isNotBlank()) {
-                                    viewModel.addMember(
-                                        name,
-                                        phone,
-                                        isTeam,
-                                        if (isTeam) participants.ifBlank { null } else null,
-                                    )
-                                    showAddDialog = false
+                            onClick = {
+                                val ctx = LocalContext.current
+                                val sanitizedName = Validation.sanitizeText(name)
+                                if (!Validation.isValidName(sanitizedName)) {
+                                    Toast.makeText(ctx, "Invalid member name", Toast.LENGTH_SHORT).show()
+                                    return@Button
                                 }
+                                val sanitizedPhone = phone.trim()
+                                if (sanitizedPhone.isNotEmpty() && !Validation.isValidPhone(sanitizedPhone)) {
+                                    Toast.makeText(ctx, "Invalid phone number", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                val sanitizedParticipants = participants.trim()
+                                viewModel.addMember(
+                                    sanitizedName,
+                                    sanitizedPhone,
+                                    isTeam,
+                                    if (isTeam) sanitizedParticipants.ifBlank { null } else null,
+                                )
+                                showAddDialog = false
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
                             modifier = Modifier.testTag("save_member_button"),
@@ -233,20 +244,30 @@ fun MembersScreen(
                         TextButton(onClick = { showPaymentDialogForMember = null }) { Text("Cancel", color = Color(0xFF64748B)) }
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(
-                            onClick = { 
-                                val amount = amountStr.toLongOrNull() ?: 0
-                                if (amount > 0) { 
-                                    viewModel.addInstallment(
-                                        memberId = member.id, 
-                                        amount = amount, 
-                                        paymentMethod = method, 
-                                        referenceNumber = reference, 
-                                        remarks = remarks, 
-                                        isVerified = verifyImmediately,
-                                        senderName = senderName.ifBlank { null }
-                                    )
-                                    showPaymentDialogForMember = null
+                            onClick = {
+                                val ctx = LocalContext.current
+                                val amount = amountStr.toLongOrNull() ?: 0L
+                                if (!Validation.isValidAmount(amount)) {
+                                    Toast.makeText(ctx, "Invalid amount", Toast.LENGTH_SHORT).show()
+                                    return@Button
                                 }
+                                val ref = reference.trim()
+                                if (ref.length > 40) {
+                                    Toast.makeText(ctx, "Reference too long", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                val sanitizedRemarks = Validation.sanitizeText(remarks)
+                                val sanitizedSender = Validation.sanitizeText(senderName).ifBlank { null }
+                                viewModel.addInstallment(
+                                    memberId = member.id,
+                                    amount = amount,
+                                    paymentMethod = method,
+                                    referenceNumber = ref,
+                                    remarks = sanitizedRemarks,
+                                    isVerified = verifyImmediately,
+                                    senderName = sanitizedSender
+                                )
+                                showPaymentDialogForMember = null
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
                             modifier = Modifier.testTag("payment_submit_button")
