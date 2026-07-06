@@ -8,7 +8,8 @@ import androidx.room.RoomDatabase
 @Database(
     entities = [EqubGroup::class, Member::class, Installment::class, AuditLog::class],
     version = 2,
-    exportSchema = false
+    exportSchema = true // export schema for migrations / schema tracking
+)
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun equbDao(): EqubDao
@@ -24,8 +25,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "equb_manager_db"
                 )
-                .fallbackToDestructiveMigration(true)
-                .build()
+                    // NOTE: add migrations here when schema updates are introduced
+                    .build()
                 INSTANCE = instance
                 instance
             }

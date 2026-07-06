@@ -1,5 +1,6 @@
 package com.example.utils
 
+import android.util.Log
 import java.util.regex.Pattern
 
 data class ParsedPayment(
@@ -34,24 +35,29 @@ object SmsParser {
         }
 
         // 1. Amount Extraction (matches ETB 5,000.00, 5,000.00 Birr, 5000 Birr, ETB 1000)
-        // Let's strip commas from amount to match easily
         val textWithoutCommas = trimmed.replace(",", "")
-        
-        // Match numbers like 5000 or 5000.00 or 5000.50
-        val amountPattern = Pattern.compile("(?i)(?:etb|birr|credited with)\\s*(\\d+(?:\\.\\d{1,2})?)|(\\d+(?:\\.\\d{1,2})?)\\s*(?:etb|birr|ebirr)")
+
+        // Prefer amounts that are annotated with currency words
+        val amountPattern = Pattern.compile("(?i)(?:etb|birr|credited with|amount)[:\s]*?(\d+(?:\.\d{1,2})?)|(?i)(\d+(?:\\.\\d{1,2})?)\\s*(?:etb|birr|ebirr)")
         val amountMatcher = amountPattern.matcher(textWithoutCommas)
         if (amountMatcher.find()) {
-            val amountStr = amountMatcher.group(1) ?: amountMatcher.group(2)
-            if (amountStr != null) {
-                // Parse double, convert to whole Long (ignore decimals or round down)
-                amount = amountStr.toDoubleOrNull()?.toLong() ?: 0
+            val a1 = try { amountMatcher.group(1) } catch (t: Throwable) { null }
+            val a2 = try { amountMatcher.group(2) } catch (t: Throwable) { null }
+            val amountStr = a1 ?: a2
+            if (!amountStr.isNullOrBlank()) {
+                val parsed = amountStr.toDoubleOrNull()
+                if (parsed != null) {
+                    amount = Math.round(parsed)
+                }
             }
         } else {
-            // Backup simpler digits match
+            // Backup simpler digits match but avoid matching phone numbers (9+ digits)
             val digitsPattern = Pattern.compile("\\b(\\d{3,7})\\b")
             val digitsMatcher = digitsPattern.matcher(textWithoutCommas)
             while (digitsMatcher.find()) {
-                val candidate = digitsMatcher.group(1)?.toLongOrNull() ?: 0
+                val candidateStr = digitsMatcher.group(1) ?: continue
+                if (candidateStr.length >= 9) continue // likely a phone number
+                val candidate = candidateStr.toLongOrNull() ?: 0
                 if (candidate in 100..500000) { // realistic contribution limits
                     amount = candidate
                     break
@@ -59,8 +65,12 @@ object SmsParser {
             }
         }
 
+        if (amount == 0L) {
+            Log.w("SmsParser", "Could not confidently parse amount from SMS: $trimmed")
+        }
+
         // 2. Reference Number (Matches Ref: FT261858X3N, Ref: CBE928102, Ref MPT2839210)
-        val refPattern = Pattern.compile("(?i)\\bref(?:erence)?:?\\s*([a-zA-Z0-9]+)\\b")
+        val refPattern = Pattern.compile("(?i)\\bref(?:erence)?:?\\s*([a-zA-Z0-9-]+)\\b")
         val refMatcher = refPattern.matcher(trimmed)
         if (refMatcher.find()) {
             reference = refMatcher.group(1) ?: ""
@@ -74,15 +84,13 @@ object SmsParser {
         }
 
         // 3. Sender Name
-        // Try CBE pattern: "received ... from [NAME]." or "transfer of ... from [NAME]"
-        val senderPattern = Pattern.compile("(?i)(?:from|transfer of|deposited by)\\s+([a-zA-Z\\s]{3,25})(?:\\s+to|\\s+on|\\.|\\s+at)")
+        val senderPattern = Pattern.compile("(?i)(?:from|transfer of|deposited by)\\s+([a-zA-Z\\s]{3,30})(?:\\s+to|\\s+on|\\.|\\s+at)")
         val senderMatcher = senderPattern.matcher(trimmed)
         if (senderMatcher.find()) {
             senderName = senderMatcher.group(1)?.trim() ?: ""
         }
 
         // 4. Date
-        // Matches format YYYY-MM-DD or DD/MM/YYYY or DD-MMM-YYYY
         val datePattern = Pattern.compile("(\\d{4}-\\d{2}-\\d{2}|\\d{2}/\\d{2}/\\d{4}|\\d{2}-\\w{3}-\\d{4})")
         val dateMatcher = datePattern.matcher(trimmed)
         if (dateMatcher.find()) {

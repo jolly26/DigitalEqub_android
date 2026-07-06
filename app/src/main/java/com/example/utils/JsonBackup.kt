@@ -1,5 +1,6 @@
 package com.example.utils
 
+import android.util.Log
 import com.example.data.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -190,7 +191,7 @@ object JsonBackup {
                 roleSetting = equbGroup?.roleSetting ?: "CO_CHAIR"
             )
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("JsonBackup", "Failed to parse backup JSON", e)
             null
         }
     }
