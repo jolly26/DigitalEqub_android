@@ -12,7 +12,8 @@ data class EqubGroup(
     val startDate: String, // YYYY-MM-DD
     val currentRound: Int = 1,
     val currentCycleIndex: Int = 1,
-    val roleSetting: String = "CHAIRMAN" // "CHAIRMAN" or "CO_CHAIR"
+    val roleSetting: String = "CHAIRMAN", // "CHAIRMAN" or "CO_CHAIR"
+    val autoDrawEnabled: Boolean = true
 )
 
 @Entity(tableName = "members")

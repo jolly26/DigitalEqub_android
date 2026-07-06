@@ -40,6 +40,7 @@ object JsonBackup {
             eqObj.put("currentRound", equbGroup.currentRound)
             eqObj.put("currentCycleIndex", equbGroup.currentCycleIndex)
             eqObj.put("roleSetting", equbGroup.roleSetting)
+            eqObj.put("autoDrawEnabled", equbGroup.autoDrawEnabled)
             root.put("equb", eqObj)
         }
 
@@ -110,7 +111,8 @@ object JsonBackup {
                     startDate = eqObj.optString("startDate", "2026-07-04"),
                     currentRound = eqObj.optInt("currentRound", 1),
                     currentCycleIndex = eqObj.optInt("currentCycleIndex", 1),
-                    roleSetting = eqObj.optString("roleSetting", "CHAIRMAN")
+                    roleSetting = eqObj.optString("roleSetting", "CHAIRMAN"),
+                    autoDrawEnabled = eqObj.optBoolean("autoDrawEnabled", true)
                 )
             }
 

@@ -1,6 +1,5 @@
 package com.example.ui.home
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,7 +34,7 @@ fun HomeScreen(
     viewModel: EqubViewModel,
     equb: EqubGroup,
     members: List<Member>,
-    installments: List<Installment>
+    installments: List<Installment>,
 ) {
     val currentRole by viewModel.currentRole.collectAsState()
     val isWriteAuthorized = currentRole != "MEMBER"
@@ -44,7 +43,7 @@ fun HomeScreen(
     val currentRound = equb.currentRound
 
     val expectedTotal = activeMembers.size * equb.contribution
-    val currentInstallments = installments.filter { it.round == currentRound && it.cycleIndex == currentCycle }
+    val currentInstallments = installments.filter { (it.round == currentRound) && (it.cycleIndex == currentCycle) }
     val memberPaymentsMap = currentInstallments.groupBy { it.memberId }
     val paidSumMap = memberPaymentsMap.mapValues { entry -> entry.value.sumOf { it.amount } }
     
@@ -66,7 +65,7 @@ fun HomeScreen(
         }
     }
 
-    val progressPercent = if (expectedTotal > 0) (collectedTotal * 100 / expectedTotal).toInt() else 0
+    val progressPercent = if (expectedTotal > 0) ((collectedTotal * 100) / expectedTotal).toInt() else 0
     val cycleWinner = activeMembers.find { it.payoutRound == currentRound && it.payoutCycleIndex == currentCycle }
 
     var selectedFilter by remember { mutableStateOf<String?>(null) }
@@ -82,7 +81,7 @@ fun HomeScreen(
     LazyColumn(
         modifier = Modifier.fillMaxSize().testTag("home_screen"),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         if (!isWriteAuthorized) {
             item {
@@ -130,9 +129,33 @@ fun HomeScreen(
 
         item {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatBadgeBox(label = "Paid (ሙሉ የከፈሉ)", count = paidCount, textColor = Color(0xFF16A34A), bgColor = Color(0xFFDCFCE7), modifier = Modifier.weight(1f), onClick = { selectedFilter = if (selectedFilter == "Paid") null else "Paid" })
-                StatBadgeBox(label = "Partial (ከፊል)", count = partialCount, textColor = Color(0xFFD97706), bgColor = Color(0xFFFEF3C7), modifier = Modifier.weight(1f), onClick = { selectedFilter = if (selectedFilter == "Partial") null else "Partial" })
-                StatBadgeBox(label = "Unpaid (ምንም ያልከፈሉ)", count = unpaidCount, textColor = Color(0xFFDC2626), bgColor = Color(0xFFFEE2E2), modifier = Modifier.weight(1f), onClick = { selectedFilter = if (selectedFilter == "Unpaid") null else "Unpaid" })
+                StatBadgeBox(
+                    label = "Paid (ሙሉ የከፈሉ)",
+                    count = paidCount,
+                    textColor = Color(0xFF16A34A),
+                    bgColor = Color(0xFFDCFCE7),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    selectedFilter = if (selectedFilter == "Paid") null else "Paid"
+                }
+                StatBadgeBox(
+                    label = "Partial (ከፊል)",
+                    count = partialCount,
+                    textColor = Color(0xFFD97706),
+                    bgColor = Color(0xFFFEF3C7),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    selectedFilter = if (selectedFilter == "Partial") null else "Partial"
+                }
+                StatBadgeBox(
+                    label = "Unpaid (ምንም ያልከፈሉ)",
+                    count = unpaidCount,
+                    textColor = Color(0xFFDC2626),
+                    bgColor = Color(0xFFFEE2E2),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    selectedFilter = if (selectedFilter == "Unpaid") null else "Unpaid"
+                }
             }
         }
 
@@ -182,7 +205,14 @@ fun HomeScreen(
                         }
                     } else {
                         Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(16.dp)).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(text = "Current Month's Winner not chosen.", fontSize = 13.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Medium)
+                            Text(
+                                text = if (equb.autoDrawEnabled) "Current Month's Winner not chosen." 
+                                       else "Auto-Draw is DISABLED. Pick a winner manually below or from the Members tab.", 
+                                fontSize = 13.sp, 
+                                color = if (equb.autoDrawEnabled) Color(0xFF64748B) else Color(0xFF4F46E5),
+                                fontWeight = FontWeight.Medium,
+                                textAlign = TextAlign.Center
+                            )
                             Button(onClick = { viewModel.drawLotteryWinner() }, enabled = isWriteAuthorized, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5), disabledContainerColor = Color(0xFFCBD5E1)), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().height(44.dp).testTag("run_lottery_draw_button")) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Icon(Icons.Default.Casino, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -215,9 +245,10 @@ fun HomeScreen(
                     memberName = m?.name ?: "Unknown",
                     installment = inst,
                     isWriteAuthorized = isWriteAuthorized,
-                    onVerifyClick = { viewModel.verifyInstallment(inst.id, !inst.isVerified) },
-                    onDeleteClick = { viewModel.deleteInstallment(inst.id) }
-                )
+                    onVerifyClick = { viewModel.verifyInstallment(inst.id, !inst.isVerified) }
+                ) {
+                    viewModel.deleteInstallment(inst.id)
+                }
             }
         }
     }
@@ -247,7 +278,9 @@ fun StatBadgeBox(label: String, count: Int, textColor: Color, bgColor: Color, mo
 
 @Composable
 fun PaymentItemCard(memberName: String, installment: Installment, isWriteAuthorized: Boolean = true, onVerifyClick: () -> Unit, onDeleteClick: () -> Unit) {
-    val initials = if (memberName.isNotBlank()) memberName.split(" ").asSequence().take(2).map { it.take(1) }.joinToString("").uppercase() else "UN"
+    val initials = if (memberName.isNotBlank()) {
+        memberName.split(" ").asSequence().take(2).map { it.substring(0, 1) }.joinToString("").uppercase()
+    } else "UN"
     Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White), border = BorderStroke(1.dp, Color(0xFFF8FAFC)), modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

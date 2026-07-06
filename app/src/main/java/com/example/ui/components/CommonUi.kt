@@ -109,12 +109,13 @@ fun HeaderBar(
 
 @Composable
 fun InitialSetupScreen(
-    onSetup: (name: String, contribution: Long, cycle: String, startDate: String) -> Unit
+    onSetup: (name: String, contribution: Long, cycle: String, startDate: String, autoDraw: Boolean) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var contributionStr by remember { mutableStateOf("") }
     var cycleType by remember { mutableStateOf("Monthly") }
     var startDate by remember { mutableStateOf("") }
+    var autoDraw by remember { mutableStateOf(true) }
 
     LaunchedEffect(key1 = true) {
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -177,7 +178,7 @@ fun InitialSetupScreen(
                 DoubleTapOutlinedTextField(
                     value = contributionStr,
                     onValueChange = { if (it.all { char -> char.isDigit() }) contributionStr = it },
-                    label = { Text("Monthly Contribution (ETB)") },
+                    label = { Text("$cycleType Contribution (ETB)") },
                     placeholder = { Text("e.g., 5000") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth().testTag("setup_equb_contribution"),
@@ -222,13 +223,25 @@ fun InitialSetupScreen(
                     singleLine = true
                 )
 
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { autoDraw = !autoDraw },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Automated Lottery Draw", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+                        Text("System picks a random winner when everyone pays. Disable if you prefer a manual physical pot.", fontSize = 11.sp, color = Color(0xFF64748B))
+                    }
+                    Switch(checked = autoDraw, onCheckedChange = { autoDraw = it })
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
                     onClick = {
                         val contrib = contributionStr.toLongOrNull() ?: 0
-                        if (name.isNotBlank() && contrib > 0 && startDate.isNotBlank()) {
-                            onSetup(name, contrib, cycleType, startDate)
+                        if (name.isNotBlank() && (contrib > 0) && startDate.isNotBlank()) {
+                            onSetup(name, contrib, cycleType, startDate, autoDraw)
                         }
                     },
                     modifier = Modifier

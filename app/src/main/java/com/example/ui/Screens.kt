@@ -73,8 +73,8 @@ fun EqubAppContent(viewModel: EqubViewModel) {
         ) {
             if (equb == null) {
                 // Show initial setup screen
-                InitialSetupScreen { name, contribution, cycle, start ->
-                    viewModel.setupEqub(name, contribution, cycle, start)
+                InitialSetupScreen { name, contribution, cycle, start, autoDraw ->
+                    viewModel.setupEqub(name, contribution, cycle, start, autoDraw)
                 }
             } else {
                 when (activeTab) {

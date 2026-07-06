@@ -129,7 +129,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Create / Setup Equb Group
-    fun setupEqub(name: String, contribution: Long, cycleType: String, startDate: String) {
+    fun setupEqub(name: String, contribution: Long, cycleType: String, startDate: String, autoDraw: Boolean = true) {
         viewModelScope.launch {
             val existing = repository.getEqubGroup()
             val newGroup = EqubGroup(
@@ -141,9 +141,10 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
                 currentRound = existing?.currentRound ?: 1,
                 currentCycleIndex = existing?.currentCycleIndex ?: 1,
                 roleSetting = existing?.roleSetting ?: "CHAIRMAN",
+                autoDrawEnabled = autoDraw,
             )
             repository.insertOrUpdateEqubGroup(newGroup)
-            logAction("CREATE_EQUB", "Equb setup/updated: $name ($cycleType, contribution: $contribution ETB, start: $startDate)", contribution)
+            logAction("CREATE_EQUB", "Equb setup/updated: $name ($cycleType, contribution: $contribution ETB, auto-draw: $autoDraw)", contribution)
             feedbackMessage.emit("Equb '$name' setup successfully")
         }
     }
@@ -313,39 +314,55 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         if (allMembersPaidAndVerified) {
-            // 1. Draw winner if not already set
             val currentWinner = allMembers.find { (it.payoutRound == currentRound) && (it.payoutCycleIndex == currentCycle) }
-            var winnerName = currentWinner?.name
             
-            if (currentWinner == null) {
-                val eligible = activeMembers.filter { (it.payoutRound != currentRound) || (it.payoutCycleIndex == null) }
-                if (eligible.isNotEmpty()) {
-                    val newWinner = eligible.random()
-                    winnerName = newWinner.name
-                    repository.setMemberPayout(newWinner.id, currentRound, currentCycle, getCurrentTimestamp())
-                    logAction("AUTO_DRAW_WINNER", "Cycle complete! Automated Lottery Drawn (ዕጣ): $winnerName", eq.contribution)
+            if (eq.autoDrawEnabled) {
+                var winnerName = currentWinner?.name
+                if (currentWinner == null) {
+                    val eligible = activeMembers.filter { (it.payoutRound != currentRound) || (it.payoutCycleIndex == null) }
+                    if (eligible.isNotEmpty()) {
+                        val newWinner = eligible.random()
+                        winnerName = newWinner.name
+                        repository.setMemberPayout(newWinner.id, currentRound, currentCycle, getCurrentTimestamp())
+                        logAction("AUTO_DRAW_WINNER", "Cycle complete! Automated Lottery Drawn (ዕጣ): $winnerName", eq.contribution)
+                    }
                 }
-            }
-
-            feedbackMessage.emit("Cycle $currentCycle Complete! All payments verified. Winner: ${winnerName ?: "Unknown"}")
-
-            // 2. Advance cycle or start next round
-            val stillEligible = activeMembers.count { (it.payoutRound != currentRound) || (it.payoutCycleIndex == null) }
-            if (stillEligible == 0) {
-                // Round complete
-                val nextRound = currentRound + 1
-                repository.updateRoundAndCycle(nextRound, 1)
-                for (m in allMembers) {
-                    repository.setMemberPayout(m.id, null, null, null)
-                }
-                logAction("AUTO_ARCHIVE_ROUND", "Round $currentRound complete! Automatically started Round $nextRound")
-                feedbackMessage.emit("Round $currentRound finished! Archive generated. Starting Round $nextRound.")
+                
+                feedbackMessage.emit("Cycle $currentCycle Complete! All payments verified. Winner: ${winnerName ?: "Unknown"}")
+                proceedToNextCycle(allMembers, activeMembers, currentRound, currentCycle)
             } else {
-                val nextCycle = currentCycle + 1
-                repository.updateCurrentCycle(nextCycle)
-                logAction("AUTO_ADVANCE_CYCLE", "Cycle complete! Automatically advanced to Month $nextCycle")
-                feedbackMessage.emit("Moving to Month $nextCycle...")
+                // Manual Draw mode
+                if (currentWinner == null) {
+                    feedbackMessage.emit("Cycle $currentCycle: All payments verified! Please set a winner manually to advance to the next cycle.")
+                } else {
+                    feedbackMessage.emit("Cycle $currentCycle complete! Winner ${currentWinner.name} recorded. Advancing...")
+                    proceedToNextCycle(allMembers, activeMembers, currentRound, currentCycle)
+                }
             }
+        }
+    }
+
+    private suspend fun proceedToNextCycle(
+        allMembers: List<Member>,
+        activeMembers: List<Member>,
+        currentRound: Int,
+        currentCycle: Int,
+    ) {
+        val stillEligible = activeMembers.count { (it.payoutRound != currentRound) || (it.payoutCycleIndex == null) }
+        if (stillEligible == 0) {
+            // Round complete
+            val nextRound = currentRound + 1
+            repository.updateRoundAndCycle(nextRound, 1)
+            for (m in allMembers) {
+                repository.setMemberPayout(m.id, null, null, null)
+            }
+            logAction("AUTO_ARCHIVE_ROUND", "Round $currentRound complete! Automatically started Round $nextRound")
+            feedbackMessage.emit("Round $currentRound finished! Archive generated. Starting Round $nextRound.")
+        } else {
+            val nextCycle = currentCycle + 1
+            repository.updateCurrentCycle(nextCycle)
+            logAction("AUTO_ADVANCE_CYCLE", "Cycle complete! Automatically advanced to Month $nextCycle")
+            feedbackMessage.emit("Moving to Month $nextCycle...")
         }
     }
 
@@ -413,6 +430,8 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
             repository.setMemberPayout(winner.id, eq.currentRound, eq.currentCycleIndex, payoutDate)
             logAction("DRAW_WINNER", "Winner manually set: ${winner.name} for Rd ${eq.currentRound} Month ${eq.currentCycleIndex}", eq.contribution)
             feedbackMessage.emit("Winner set: ${winner.name}")
+            
+            checkAndTransitionCycle()
         }
     }
 
