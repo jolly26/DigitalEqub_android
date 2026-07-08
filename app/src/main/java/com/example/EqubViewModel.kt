@@ -152,13 +152,34 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     // Member Management
     fun addMember(name: String, phone: String, isTeam: Boolean = false, participants: String? = null) {
         viewModelScope.launch {
-            if (name.isBlank()) {
-                feedbackMessage.emit("Member name cannot be empty")
+            val trimmedName = name.trim()
+            val trimmedPhone = phone.trim()
+
+            if (trimmedName.isBlank()) {
+                feedbackMessage.emit("Validation Error: Member name cannot be empty")
                 return@launch
             }
+
+            // Ethiopian Phone Validation: Should be 10 digits (e.g. 0911223344)
+            if (!trimmedPhone.all { it.isDigit() } || trimmedPhone.length != 10) {
+                feedbackMessage.emit("Validation Error: Phone number must be exactly 10 digits (e.g. 0911223344)")
+                return@launch
+            }
+
+            // Check for duplicate phone or name
+            val allMembers = repository.getAllMembers()
+            if (allMembers.any { it.phone == trimmedPhone }) {
+                feedbackMessage.emit("Validation Error: A member with phone number $trimmedPhone already exists")
+                return@launch
+            }
+            if (allMembers.any { it.name.equals(trimmedName, ignoreCase = true) }) {
+                feedbackMessage.emit("Validation Error: A member named '$trimmedName' already exists")
+                return@launch
+            }
+
             val member = Member(
-                name = name.trim(), 
-                phone = phone.trim(),
+                name = trimmedName,
+                phone = trimmedPhone,
                 isTeam = isTeam,
                 teamParticipants = participants?.trim(),
             )
@@ -329,20 +350,21 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 
                 feedbackMessage.emit("Cycle $currentCycle Complete! All payments verified. Winner: ${winnerName ?: "Unknown"}")
-                proceedToNextCycle(allMembers, activeMembers, currentRound, currentCycle)
+                proceedToNextCycle(eq, allMembers, activeMembers, currentRound, currentCycle)
             } else {
                 // Manual Draw mode
                 if (currentWinner == null) {
                     feedbackMessage.emit("Cycle $currentCycle: All payments verified! Please set a winner manually to advance to the next cycle.")
                 } else {
                     feedbackMessage.emit("Cycle $currentCycle complete! Winner ${currentWinner.name} recorded. Advancing...")
-                    proceedToNextCycle(allMembers, activeMembers, currentRound, currentCycle)
+                    proceedToNextCycle(eq, allMembers, activeMembers, currentRound, currentCycle)
                 }
             }
         }
     }
 
     private suspend fun proceedToNextCycle(
+        eq: EqubGroup,
         allMembers: List<Member>,
         activeMembers: List<Member>,
         currentRound: Int,
@@ -361,8 +383,13 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             val nextCycle = currentCycle + 1
             repository.updateCurrentCycle(nextCycle)
-            logAction("AUTO_ADVANCE_CYCLE", "Cycle complete! Automatically advanced to Month $nextCycle")
-            feedbackMessage.emit("Moving to Month $nextCycle...")
+            val cycleLabel = when (eq.cycleType) {
+                "Weekly" -> "Week"
+                "Bi-weekly" -> "Bi-week"
+                else -> "Month"
+            }
+            logAction("AUTO_ADVANCE_CYCLE", "Cycle complete! Automatically advanced to $cycleLabel $nextCycle")
+            feedbackMessage.emit("Moving to $cycleLabel $nextCycle...")
         }
     }
 
@@ -426,6 +453,11 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
+            if (winner.payoutRound == eq.currentRound && winner.payoutCycleIndex != null) {
+                feedbackMessage.emit("Rejected: ${winner.name} has already received a payout in Round ${eq.currentRound}.")
+                return@launch
+            }
+
             val payoutDate = getCurrentTimestamp()
             repository.setMemberPayout(winner.id, eq.currentRound, eq.currentCycleIndex, payoutDate)
             logAction("DRAW_WINNER", "Winner manually set: ${winner.name} for Rd ${eq.currentRound} Month ${eq.currentCycleIndex}", eq.contribution)
@@ -475,13 +507,19 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
     fun archiveAndStartNextRound() {
         viewModelScope.launch {
             val eq = repository.getEqubGroup() ?: return@launch
+            val allMembers = repository.getAllMembers()
+            val activeMembers = allMembers.filter { it.isActive }
+            
+            // Check if everyone has won in this round
+            val winnersCount = activeMembers.count { (it.payoutRound == eq.currentRound) && (it.payoutCycleIndex != null) }
+            if (winnersCount < activeMembers.size) {
+                feedbackMessage.emit("Cannot complete Round: Only $winnersCount of ${activeMembers.size} members have received payouts.")
+                return@launch
+            }
+
             val nextRound = eq.currentRound + 1
             repository.updateRoundAndCycle(nextRound, 1)
             
-            // Note: Keep member IDs and info, but their round-specific payout variables are set to NULL for the new round.
-            // When calculating stats for past rounds, we look at historical payout data in audit logs or we can archive historical payout entries.
-            // Actually, we can keep the members list but clear their current payoutRound/payoutCycleIndex, as they are saved in the logs!
-            val allMembers = repository.getAllMembers()
             for (m in allMembers) {
                 repository.setMemberPayout(m.id, null, null, null)
             }

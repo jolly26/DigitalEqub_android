@@ -36,6 +36,7 @@ fun HeaderBar(
     equbName: String,
     round: Int,
     cycleIndex: Int,
+    cycleType: String,
     role: String,
     onRoleClick: () -> Unit
 ) {
@@ -61,8 +62,13 @@ fun HeaderBar(
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
+                val cycleLabel = when (cycleType) {
+                    "Weekly" -> "WEEK"
+                    "Bi-weekly" -> "BI-WEEK"
+                    else -> "MONTH"
+                }
                 Text(
-                    text = "ROUND $round • CYCLE MONTH $cycleIndex",
+                    text = "ROUND $round • $cycleLabel $cycleIndex",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF64748B),
@@ -239,10 +245,22 @@ fun InitialSetupScreen(
 
                 Button(
                     onClick = {
+                        val trimmedName = name.trim()
                         val contrib = contributionStr.toLongOrNull() ?: 0
-                        if (name.isNotBlank() && (contrib > 0) && startDate.isNotBlank()) {
-                            onSetup(name, contrib, cycleType, startDate, autoDraw)
+                        val datePattern = Regex("^\\d{4}-\\d{2}-\\d{2}$")
+                        
+                        when {
+                            trimmedName.length < 3 -> {
+                                // We could use a local error state, but using the feedbackMessage via onSetup triggers is better if integrated.
+                                // However, for UI responsiveness, we'll check simple things here.
+                            }
                         }
+
+                        if (trimmedName.isBlank()) return@Button
+                        if (contrib <= 0) return@Button
+                        if (!startDate.matches(datePattern)) return@Button
+
+                        onSetup(trimmedName, contrib, cycleType, startDate, autoDraw)
                     },
                     modifier = Modifier
                         .fillMaxWidth()

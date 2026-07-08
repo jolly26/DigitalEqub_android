@@ -10,7 +10,6 @@ import androidx.room.RoomDatabase
     version = 2,
     exportSchema = true // export schema for migrations / schema tracking
 )
-)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun equbDao(): EqubDao
 
