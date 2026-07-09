@@ -161,7 +161,7 @@ class EqubViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             // Ethiopian Phone Validation: Should be 10 digits (e.g. 0911223344)
-            if (!trimmedPhone.all { it.isDigit() } || trimmedPhone.length != 10) {
+            if ((!trimmedPhone.all { it.isDigit() }) || (trimmedPhone.length != 10)) {
                 feedbackMessage.emit("Validation Error: Phone number must be exactly 10 digits (e.g. 0911223344)")
                 return@launch
             }

@@ -3,6 +3,7 @@ package com.example.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -17,7 +18,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
@@ -343,6 +349,8 @@ fun DoubleTapOutlinedTextField(
         unfocusedPlaceholderColor = Color(0xFF94A3B8)
     )
 ) {
+    var isEditingByDoubleTap by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -350,20 +358,23 @@ fun DoubleTapOutlinedTextField(
         onDone = {
             focusManager.clearFocus()
             keyboardController?.hide()
+            isEditingByDoubleTap = false
             keyboardActions.onDone?.invoke(this)
         },
         onNext = {
-            focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Next)
+            focusManager.moveFocus(FocusDirection.Next)
             keyboardActions.onNext?.invoke(this)
         },
         onSearch = {
             focusManager.clearFocus()
             keyboardController?.hide()
+            isEditingByDoubleTap = false
             keyboardActions.onSearch?.invoke(this)
         },
         onGo = {
             focusManager.clearFocus()
             keyboardController?.hide()
+            isEditingByDoubleTap = false
             keyboardActions.onGo?.invoke(this)
         }
     )
@@ -380,23 +391,58 @@ fun DoubleTapOutlinedTextField(
         keyboardOptions
     }
 
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier.fillMaxWidth(),
-        enabled = enabled,
-        readOnly = readOnly,
-        label = label,
-        placeholder = placeholder,
-        leadingIcon = leadingIcon,
-        trailingIcon = trailingIcon,
-        keyboardOptions = finalKeyboardOptions,
-        keyboardActions = finalKeyboardActions,
-        singleLine = singleLine,
-        maxLines = maxLines,
-        shape = shape,
-        colors = colors
-    )
+    Box(
+        modifier = modifier
+            .pointerInput(enabled, isEditingByDoubleTap) {
+                if (enabled && !isEditingByDoubleTap) {
+                    detectTapGestures(
+                        onDoubleTap = {
+                            isEditingByDoubleTap = true
+                            focusRequester.requestFocus()
+                            keyboardController?.show()
+                        }
+                    )
+                }
+            }
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {
+                if (!enabled || readOnly) return@OutlinedTextField
+                if (isEditingByDoubleTap) {
+                    onValueChange(it)
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester)
+                .onFocusChanged { focusState ->
+                    if (!focusState.isFocused) {
+                        isEditingByDoubleTap = false
+                    }
+                },
+            enabled = enabled,
+            readOnly = readOnly || !isEditingByDoubleTap,
+            label = label ?: {
+                if (!isEditingByDoubleTap && value.isEmpty()) {
+                    Text("Double tap to edit")
+                }
+            },
+            placeholder = placeholder ?: {
+                if (!isEditingByDoubleTap && value.isEmpty()) {
+                    Text("Double tap to edit")
+                }
+            },
+            leadingIcon = leadingIcon,
+            trailingIcon = trailingIcon,
+            keyboardOptions = finalKeyboardOptions,
+            keyboardActions = finalKeyboardActions,
+            singleLine = singleLine,
+            maxLines = maxLines,
+            shape = shape,
+            colors = colors
+        )
+    }
 }
 
 @Composable

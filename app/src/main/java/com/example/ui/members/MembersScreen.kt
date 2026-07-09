@@ -1,6 +1,7 @@
 package com.example.ui.members
 
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -165,15 +166,14 @@ fun MembersScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(
                             onClick = {
-                                val ctx = LocalContext.current
                                 val sanitizedName = Validation.sanitizeText(name)
                                 if (!Validation.isValidName(sanitizedName)) {
-                                    Toast.makeText(ctx, "Invalid member name", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Invalid member name", Toast.LENGTH_SHORT).show()
                                     return@Button
                                 }
                                 val sanitizedPhone = phone.trim()
                                 if (sanitizedPhone.isNotEmpty() && !Validation.isValidPhone(sanitizedPhone)) {
-                                    Toast.makeText(ctx, "Invalid phone number", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Invalid phone number", Toast.LENGTH_SHORT).show()
                                     return@Button
                                 }
                                 val sanitizedParticipants = participants.trim()
@@ -245,15 +245,14 @@ fun MembersScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(
                             onClick = {
-                                val ctx = LocalContext.current
                                 val amount = amountStr.toLongOrNull() ?: 0L
                                 if (!Validation.isValidAmount(amount)) {
-                                    Toast.makeText(ctx, "Invalid amount", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Invalid amount", Toast.LENGTH_SHORT).show()
                                     return@Button
                                 }
                                 val ref = reference.trim()
                                 if (ref.length > 40) {
-                                    Toast.makeText(ctx, "Reference too long", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Reference too long", Toast.LENGTH_SHORT).show()
                                     return@Button
                                 }
                                 val sanitizedRemarks = Validation.sanitizeText(remarks)

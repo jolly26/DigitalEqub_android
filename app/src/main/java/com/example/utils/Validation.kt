@@ -1,7 +1,7 @@
 package com.example.utils
 
 object Validation {
-    private val PHONE_REGEX = Regex("^\\+?\\d{7,15}$")
+    private val PHONE_REGEX = Regex("^09\\d{8}$|^07\\d{8}$") // standard Ethiopian mobile formats
     private val NAME_REGEX = Regex("^[\\p{L}0-9 .,'-]{1,80}$")
     private const val MAX_AMOUNT = 1_000_000L
 

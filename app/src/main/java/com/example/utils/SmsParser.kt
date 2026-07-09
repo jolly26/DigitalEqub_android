@@ -22,7 +22,7 @@ object SmsParser {
         var amount: Long = 0
         var reference = ""
         var senderName = ""
-        var date = ""
+        var date: String
 
         // Detect Bank
         val lowerText = trimmed.lowercase()
@@ -40,11 +40,11 @@ object SmsParser {
         val textWithoutCommas = trimmed.replace(",", "")
 
         // Prefer amounts that are annotated with currency words
-        val amountPattern = Pattern.compile("(?i)(?:etb|birr|credited with|amount)[:\s]*?(\d+(?:\.\d{1,2})?)|(?i)(\d+(?:\\.\\d{1,2})?)\\s*(?:etb|birr|ebirr)")
+        val amountPattern = Pattern.compile("(?i)(?:etb|birr|credited with|amount)[:\\s]*?(\\d+(?:\\.\\d{1,2})?)|(?i)(\\d+(?:\\.\\d{1,2})?)\\s*(?:etb|birr|ebirr)")
         val amountMatcher = amountPattern.matcher(textWithoutCommas)
         if (amountMatcher.find()) {
-            val a1 = try { amountMatcher.group(1) } catch (t: Throwable) { null }
-            val a2 = try { amountMatcher.group(2) } catch (t: Throwable) { null }
+            val a1 = try { amountMatcher.group(1) } catch (_: Throwable) { null }
+            val a2 = try { amountMatcher.group(2) } catch (_: Throwable) { null }
             val amountStr = a1 ?: a2
             if (!amountStr.isNullOrBlank()) {
                 val parsed = amountStr.toDoubleOrNull()
