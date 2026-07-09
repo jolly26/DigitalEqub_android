@@ -24,6 +24,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "equb_manager_db"
                 )
+                    .fallbackToDestructiveMigration(true)
                     // NOTE: add migrations here when schema updates are introduced
                     .build()
                 INSTANCE = instance
