@@ -69,12 +69,12 @@ fun HeaderBar(
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
                 val cycleLabel = when (cycleType) {
-                    "Weekly" -> "WEEK"
-                    "Bi-weekly" -> "BI-WEEK"
-                    else -> "MONTH"
+                    "Weekly" -> "ሳምንት"
+                    "Bi-weekly" -> "ሁለት ሳምንት"
+                    else -> "ወር"
                 }
                 Text(
-                    text = "ROUND $round • $cycleLabel $cycleIndex",
+                    text = "ዙር $round • $cycleLabel $cycleIndex",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF64748B),
@@ -85,9 +85,9 @@ fun HeaderBar(
             Spacer(modifier = Modifier.width(12.dp))
             
             val style = when (role) {
-                "CHAIRMAN" -> Triple(Color(0xFFE0E7FF), Color(0xFF4F46E5), "Chairman (A)")
-                "CO_CHAIR" -> Triple(Color(0xFFE0F2FE), Color(0xFF0284C7), "Co-Chair (B)")
-                else -> Triple(Color(0xFFF1F5F9), Color(0xFF64748B), "Regular Member")
+                "CHAIRMAN" -> Triple(Color(0xFFE0E7FF), Color(0xFF4F46E5), "ሊቀመንበር (A)")
+                "CO_CHAIR" -> Triple(Color(0xFFE0F2FE), Color(0xFF0284C7), "ምክትል (B)")
+                else -> Triple(Color(0xFFF1F5F9), Color(0xFF64748B), "ተራ አባል")
             }
             Box(
                 modifier = Modifier
@@ -125,7 +125,7 @@ fun InitialSetupScreen(
 ) {
     var name by remember { mutableStateOf("") }
     var contributionStr by remember { mutableStateOf("") }
-    var cycleType by remember { mutableStateOf("Monthly") }
+    var cycleType by remember { mutableStateOf("ወርሃዊ") }
     var startDate by remember { mutableStateOf("") }
     var autoDraw by remember { mutableStateOf(true) }
 
@@ -162,14 +162,14 @@ fun InitialSetupScreen(
                 )
                 
                 Text(
-                    text = "Setup New Equb Group",
+                    text = "አዲስ ዕቁብ ያቋቁሙ",
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF1E293B)
                 )
                 
                 Text(
-                    text = "Ethiopian Rotating Savings Association (ዕቁብ) management completely offline & secure.",
+                    text = "የኢትዮጵያ የዙር ቁጠባ ማህበር (ዕቁብ) አስተዳደር።",
                     fontSize = 13.sp,
                     color = Color(0xFF64748B),
                     textAlign = TextAlign.Center,
@@ -180,8 +180,8 @@ fun InitialSetupScreen(
                 DoubleTapOutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Equb Name") },
-                    placeholder = { Text("e.g., Abyssinia Traders Equb") },
+                    label = { Text("የዕቁብ ስም") },
+                    placeholder = { Text("ምሳሌ፡ የአቢሲንያ ነጋዴዎች ዕቁብ") },
                     modifier = Modifier.fillMaxWidth().testTag("setup_equb_name"),
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true
@@ -190,8 +190,8 @@ fun InitialSetupScreen(
                 DoubleTapOutlinedTextField(
                     value = contributionStr,
                     onValueChange = { if (it.all { char -> char.isDigit() }) contributionStr = it },
-                    label = { Text("$cycleType Contribution (ETB)") },
-                    placeholder = { Text("e.g., 5000") },
+                    label = { Text("$cycleType መዋጮ (በብር)") },
+                    placeholder = { Text("ምሳሌ፡ 5000") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth().testTag("setup_equb_contribution"),
                     shape = RoundedCornerShape(12.dp),
@@ -199,12 +199,12 @@ fun InitialSetupScreen(
                 )
 
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Contribution Frequency", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
+                    Text("የመዋጮ ድግግሞሽ", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        listOf("Weekly", "Bi-weekly", "Monthly").forEach { freq ->
+                        listOf("ሳምንታዊ", "ሁለት ሳምንት", "ወርሃዊ").forEach { freq ->
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -228,8 +228,8 @@ fun InitialSetupScreen(
                 DoubleTapOutlinedTextField(
                     value = startDate,
                     onValueChange = { startDate = it },
-                    label = { Text("Start Date") },
-                    placeholder = { Text("YYYY-MM-DD") },
+                    label = { Text("የመጀመሪያ ቀን") },
+                    placeholder = { Text("ዓመተ-ምህረት-ወር-ቀን") },
                     modifier = Modifier.fillMaxWidth().testTag("setup_equb_start_date"),
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true
@@ -241,8 +241,8 @@ fun InitialSetupScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Automated Lottery Draw", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
-                        Text("System picks a random winner when everyone pays. Disable if you prefer a manual physical pot.", fontSize = 11.sp, color = Color(0xFF64748B))
+                        Text("አውቶማቲክ ዕጣ ማውጫ", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+                        Text("ሁሉም ሰው ሲከፍል ሲስተሙ በራሱ ዕጣ ያወጣል።", fontSize = 11.sp, color = Color(0xFF64748B))
                     }
                     Switch(checked = autoDraw, onCheckedChange = { autoDraw = it })
                 }
@@ -255,18 +255,16 @@ fun InitialSetupScreen(
                         val contrib = contributionStr.toLongOrNull() ?: 0
                         val datePattern = Regex("^\\d{4}-\\d{2}-\\d{2}$")
                         
-                        when {
-                            trimmedName.length < 3 -> {
-                                // We could use a local error state, but using the feedbackMessage via onSetup triggers is better if integrated.
-                                // However, for UI responsiveness, we'll check simple things here.
-                            }
-                        }
-
                         if (trimmedName.isBlank()) return@Button
                         if (contrib <= 0) return@Button
                         if (!startDate.matches(datePattern)) return@Button
 
-                        onSetup(trimmedName, contrib, cycleType, startDate, autoDraw)
+                        val engCycle = when(cycleType) {
+                            "ሳምንታዊ" -> "Weekly"
+                            "ሁለት ሳምንት" -> "Bi-weekly"
+                            else -> "Monthly"
+                        }
+                        onSetup(trimmedName, contrib, engCycle, startDate, autoDraw)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -275,7 +273,7 @@ fun InitialSetupScreen(
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5))
                 ) {
-                    Text("Initialize Equb", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text("ዕቁቡን ጀምር", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -292,11 +290,11 @@ fun BottomNavBar(
         tonalElevation = 8.dp
     ) {
         val tabs = listOf(
-            Triple("home", "Home", Icons.Default.Home),
-            Triple("members", "Members", Icons.Default.Group),
-            Triple("sms", "SMS", Icons.Default.Mail),
-            Triple("reports", "Reports", Icons.Default.Analytics),
-            Triple("backups", "Backups", Icons.Default.Backup)
+            Triple("home", "መነሻ", Icons.Default.Home),
+            Triple("members", "አባላት", Icons.Default.Group),
+            Triple("sms", "መልዕክት", Icons.Default.Mail),
+            Triple("reports", "ሪፖርት", Icons.Default.Analytics),
+            Triple("backups", "ምትኬ", Icons.Default.Backup)
         )
 
         tabs.forEach { (tabId, label, icon) ->

@@ -51,10 +51,10 @@ fun EqubAppContent(viewModel: EqubViewModel) {
         containerColor = Color(0xFFF8F9FF),
         topBar = {
             HeaderBar(
-                equbName = equb?.name ?: "No Active Equb",
+                equbName = equb?.name ?: "ንቁ ዕቁብ የለም",
                 round = equb?.currentRound ?: 1,
                 cycleIndex = equb?.currentCycleIndex ?: 1,
-                cycleType = equb?.cycleType ?: "Monthly",
+                cycleType = equb?.cycleType ?: "ወርሃዊ",
                 role = currentRole,
             ) {
                 showRoleSecurityDialog = true
